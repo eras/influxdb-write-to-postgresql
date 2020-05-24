@@ -36,8 +36,8 @@ let db_of_identifier _t str =
   in
   loop ()
   
-let create () =
-  let db = new Pg.connection ~conninfo:"service=dbwriter_test" () in
+let create ~conninfo =
+  let db = new Pg.connection ~conninfo () in
   let quote_mode = QuoteAlways in
   let quoted_time_field = db_of_identifier db "time" in
   let subsecond_time_field = false in

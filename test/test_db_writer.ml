@@ -3,18 +3,21 @@ open OUnit2
 module Lexer = Influxdb_write_to_postgresql.Lexer
 module Db_writer = Influxdb_write_to_postgresql.Db_writer
 
-let testCreate _ctx =
-  let db = Db_writer.create () in
+let make_db _ctx =
+  Db_writer.create ~conninfo:"service=dbwriter_test"
+
+let testCreate ctx =
+  let db = make_db ctx in
   Db_writer.close db
 
-let testDbOfIdentifier _ctx =
-  let db = Db_writer.create () in
+let testDbOfIdentifier ctx =
+  let db = make_db ctx in
   let s = Db_writer.db_of_identifier db "moi" in
   assert_equal s {|"moi"|};
   Db_writer.close db
 
-let testInsert _ctx =
-  let db = Db_writer.create () in
+let testInsert ctx =
+  let db = make_db ctx in
   let meas = {
     Lexer.measurement = "meas";
     tags = [("moi1", "1");("moi2", "2")];
@@ -27,8 +30,8 @@ let testInsert _ctx =
   assert_equal (snd query) [|"1590329952"; "1"; "2"|];
   Db_writer.close db
 
-let testWrite _ctx =
-  let db = Db_writer.create () in
+let testWrite ctx =
+  let db = make_db ctx in
   let meas = {
     Lexer.measurement = "meas";
     tags = [("moi1", "1");("moi2", "2")];
