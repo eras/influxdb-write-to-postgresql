@@ -1,0 +1,12 @@
+opam-version: "2.0"
+version: "1.0"
+maintainer: "erkki.seppala@vincit.fi"
+authors: ["Erkki Seppälä"]
+homepage: "https://github.com/eras/influxdb-write-to-postgresql"
+bug-reports: "https://github.com/eras/influxdb-write-to-postgresql/issues"
+dev-repo: "git+https://github.com/eras/influxdb-write-to-postgresql.git"
+license: "Apache-2.0"
+depends: ["dune" "postgresql" "cohttp" "lwt_ppx" "lwt" "sedlex"]
+build: [
+  ["dune" "build" "-p" name "-j" jobs]
+]

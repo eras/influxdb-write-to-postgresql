@@ -1,0 +1,4 @@
+(test
+ (name test)
+ (libraries sedlex ounit2 influxdb_write_to_postgresql)
+ (preprocess (pps sedlex.ppx)))

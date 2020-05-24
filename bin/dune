@@ -1,0 +1,8 @@
+(executables
+ (names main)
+ (libraries lwt postgresql cohttp-lwt-unix sedlex influxdb_write_to_postgresql)
+ (preprocess (pps lwt_ppx sedlex.ppx)))
+
+(install
+ (section bin)
+ (files (main.exe as influxdb-write-to-postgresql)))
