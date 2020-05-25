@@ -37,11 +37,12 @@ type table_name = string
 type column_info = (table_name, field_type FieldMap.t) Hashtbl.t
 
 type t = {
-  db: Pg.connection;
+  mutable db: Pg.connection; (* mutable for reconnecting *)
   quote_mode: quote_mode;
   quoted_time_field: string;
   subsecond_time_field: bool;
-  mutable known_columns: column_info
+  mutable known_columns: column_info;
+  conninfo: string; (* used for reconnecting *)
 }
 
 let create_column_info () = Hashtbl.create 10
@@ -174,9 +175,18 @@ let create ~conninfo =
     let subsecond_time_field = false in
     let known_columns = query_column_info db in
     { db; quote_mode; quoted_time_field; subsecond_time_field;
-      known_columns }
+      known_columns;
+      conninfo }
   with Pg.Error error ->
     raise (Error (PgError error))
+
+let close t =
+  t.db#finish
+
+let reconnect t =
+  ( try close t
+    with _ -> (* eat *) () );
+  t.db <- new Pg.connection ~conninfo:t.conninfo ()
 
 let string_of_error error =
   match error with
@@ -226,8 +236,6 @@ let write t (measurements: Lexer.measurement list) =
     ) measurements;
     ignore (t.db#exec ~expect:[Pg.Command_ok] "COMMIT");
   with Pg.Error error ->
-    ignore (t.db#exec ~expect:[Pg.Command_ok] "ROLLBACK");
+    (try ignore (t.db#exec ~expect:[Pg.Command_ok] "ROLLBACK");
+     with Pg.Error _ -> (* ignore *) ());
     raise (Error (PgError error))
-
-let close t =
-  t.db#finish

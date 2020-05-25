@@ -17,6 +17,9 @@ val create : conninfo:string -> t
 (** [close t] disconnects from the database. Can raise. *)
 val close : t -> unit
 
+(** [reconnect t] disconnects and then reconnectfrom the database. Can raise. *)
+val reconnect : t -> unit
+
 (** [write t measurements] writes measurements to the database, all in one transaction.
 
     Can raise PgError *)
