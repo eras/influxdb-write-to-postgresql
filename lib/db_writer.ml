@@ -131,7 +131,10 @@ struct
     let query =
       "INSERT INTO " ^ db_of_identifier meas.measurement ^
       "(" ^ String.concat ", " (t.quoted_time_field::db_fields meas) ^ ")" ^
-      " VALUES (" ^ String.concat "," (db_placeholders meas) ^ ")"
+      " VALUES (" ^ String.concat "," (db_placeholders meas) ^ ")" ^
+      " ON CONFLICT(" ^ t.quoted_time_field ^ ") DO UPDATE SET " ^
+      String.concat ", " (db_fields meas |> List.map @@ fun field ->
+                          field ^ "=" ^ "excluded." ^ field)
     in
     let params = db_raw_values meas in
     let params =

@@ -26,7 +26,7 @@ let testInsert ctx =
   } in
   let query = Db_writer.Internal.insert_of_measurement db meas in
   (* Printf.fprintf stderr "query: %s\n%!" (fst query); *)
-  assert_equal (fst query) {|INSERT INTO "meas"("time", "moi1", "moi2") VALUES (to_timestamp($1),$2,$3)|};
+  assert_equal (fst query) {|INSERT INTO "meas"("time", "moi1", "moi2") VALUES (to_timestamp($1),$2,$3) ON CONFLICT("time") DO UPDATE SET "moi1"=excluded."moi1", "moi2"=excluded."moi2"|};
   assert_equal (snd query) [|"1590329952"; "1"; "2"|];
   Db_writer.close db
 
@@ -40,7 +40,7 @@ let testInsertNoTime ctx =
   } in
   let query = Db_writer.Internal.insert_of_measurement db meas in
   (* Printf.fprintf stderr "query: %s\n%!" (fst query); *)
-  assert_equal (fst query) {|INSERT INTO "meas"("time", "moi1", "moi2") VALUES (CURRENT_TIMESTAMP,$1,$2)|};
+  assert_equal (fst query) {|INSERT INTO "meas"("time", "moi1", "moi2") VALUES (CURRENT_TIMESTAMP,$1,$2) ON CONFLICT("time") DO UPDATE SET "moi1"=excluded."moi1", "moi2"=excluded."moi2"|};
   assert_equal (snd query) [|"1"; "2"|];
   Db_writer.close db
 
