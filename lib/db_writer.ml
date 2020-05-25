@@ -2,17 +2,66 @@ module Pg = Postgresql
 
 type quote_mode = QuoteAlways
 
+module FieldMap = Map.Make(struct type t = string let compare = compare end)
+
+type field_type =
+  | FT_String
+  | FT_Int
+  | FT_Float
+  | FT_Boolean
+  | FT_Unknown of string
+
+let db_of_field_type = function
+  | FT_Int         -> "integer"
+  | FT_Float       -> "double prescision"
+  | FT_String      -> "text"
+  | FT_Boolean     -> "boolean"
+  | FT_Unknown str -> str
+
+let field_type_of_db = function
+  | "integer"           -> FT_Int
+  | "double prescision" -> FT_Float
+  | "numeric"           -> FT_Float
+  | "text" | "varchar"  -> FT_String
+  | "boolean"           -> FT_Boolean
+  | name                -> FT_Unknown name
+
+let field_type_of_value = function
+  | Lexer.String _   -> FT_String
+  | Lexer.Int _      -> FT_Int
+  | Lexer.FloatNum _ -> FT_Float
+  | Lexer.Boolean _  -> FT_Boolean
+
+type table_name = string
+
+type column_info = (table_name, field_type FieldMap.t) Hashtbl.t
+
 type t = {
   db: Pg.connection;
   quote_mode: quote_mode;
   quoted_time_field: string;
   subsecond_time_field: bool;
+  mutable known_columns: column_info
 }
+
+let create_column_info () = Hashtbl.create 10
 
 type error =
   | PgError of Pg.error
 
 exception Error of error
+
+(* backwards compatibility; Option was introduced in OCaml 4.08 *)
+module Option :
+sig
+  val value : 'a option -> default:'a -> 'a
+end =
+struct
+  let value x ~default =
+    match x with
+    | None -> default
+    | Some x -> x
+end
 
 module Internal =
 struct
@@ -97,6 +146,19 @@ struct
         )::params
     in
     (query, params |> Array.of_list)
+
+  let query_column_info (db: Pg.connection) =
+    let result = db#exec ~expect:[Pg.Tuples_ok] "SELECT table_name, column_name, data_type FROM INFORMATION_SCHEMA.COLUMNS" in
+    let column_info = create_column_info () in
+    let () = result#get_all_lst |> List.iter @@ function
+    | [table_name; column_name; data_type] ->
+      Hashtbl.find_opt column_info table_name
+      |> Option.value ~default:FieldMap.empty
+      |> FieldMap.add column_name (field_type_of_db data_type)
+      |> Hashtbl.add column_info table_name
+    | _ -> assert false
+    in
+    column_info
 end
 
 open Internal
@@ -107,13 +169,42 @@ let create ~conninfo =
     let quote_mode = QuoteAlways in
     let quoted_time_field = db_of_identifier "time" in
     let subsecond_time_field = false in
-    { db; quote_mode; quoted_time_field; subsecond_time_field }
+    let known_columns = query_column_info db in
+    { db; quote_mode; quoted_time_field; subsecond_time_field;
+      known_columns }
   with Pg.Error error ->
     raise (Error (PgError error))
 
 let string_of_error error =
   match error with
   | PgError error -> Pg.string_of_error error
+
+(** Ensure database has the columns we need *)
+let update_columns t table_name values =
+  let missing_columns, new_columns =
+    List.fold_left
+      (fun (to_create, known_columns) (field_name, field_type) ->
+         if FieldMap.mem field_name known_columns
+         then (to_create, known_columns)
+         else ((field_name, field_type)::to_create, FieldMap.add field_name field_type known_columns)
+      )
+      ([],
+       try Hashtbl.find t.known_columns table_name
+       with Not_found -> FieldMap.empty)
+      values
+  in
+  match missing_columns with
+  | [] -> ()
+  | missing_columns ->
+    Hashtbl.add t.known_columns table_name new_columns;
+    missing_columns |> List.iter @@ fun (field_name, field_type) ->
+    ignore (t.db#exec ~expect:[Pg.Command_ok]
+              (Printf.sprintf "ALTER TABLE %s ADD COLUMN IF NOT EXISTS %s %s"
+                 (db_of_identifier table_name)
+                 (db_of_identifier field_name)
+                 (db_of_field_type field_type)
+              )
+           )
 
 let write t (measurements: Lexer.measurement list) =
   try
@@ -122,6 +213,12 @@ let write t (measurements: Lexer.measurement list) =
     List.iter (
       fun measurement -> 
         let (query, params) = insert_of_measurement t measurement in
+        let columns_types =
+          let tags = List.map (fun (name, _) -> (name, FT_String)) measurement.tags in
+          let fields = List.map (fun (name, value) -> (name, field_type_of_value value)) measurement.fields in
+          tags @ fields
+        in
+        let () = update_columns t measurement.measurement columns_types in
         ignore (t.db#exec ~params ~expect:[Pg.Command_ok] query);
     ) measurements;
     ignore (t.db#exec ~expect:[Pg.Command_ok] "COMMIT");
