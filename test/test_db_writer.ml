@@ -12,7 +12,7 @@ let testCreate ctx =
 
 let testDbOfIdentifier ctx =
   let db = make_db ctx in
-  let s = Db_writer.db_of_identifier db "moi" in
+  let s = Db_writer.Internal.db_of_identifier "moi" in
   assert_equal s {|"moi"|};
   Db_writer.close db
 
@@ -24,7 +24,7 @@ let testInsert ctx =
     fields = [];
     time = Some 1590329952000000000L;
   } in
-  let query = Db_writer.insert_of_measurement db meas in
+  let query = Db_writer.Internal.insert_of_measurement db meas in
   (* Printf.fprintf stderr "query: %s\n%!" (fst query); *)
   assert_equal (fst query) {|INSERT INTO "meas"("time", "moi1", "moi2") VALUES (to_timestamp($1),$2,$3)|};
   assert_equal (snd query) [|"1590329952"; "1"; "2"|];
@@ -38,7 +38,7 @@ let testInsertNoTime ctx =
     fields = [];
     time = None;
   } in
-  let query = Db_writer.insert_of_measurement db meas in
+  let query = Db_writer.Internal.insert_of_measurement db meas in
   (* Printf.fprintf stderr "query: %s\n%!" (fst query); *)
   assert_equal (fst query) {|INSERT INTO "meas"("time", "moi1", "moi2") VALUES (CURRENT_TIMESTAMP,$1,$2)|};
   assert_equal (snd query) [|"1"; "2"|];
