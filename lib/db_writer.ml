@@ -69,12 +69,19 @@ let db_placeholders (meas : Lexer.measurement) =
   let enumerate els =
     List.rev (fst (List.fold_left (fun (xs, n) _ -> ((n::xs), succ n)) ([], 1) els))
   in
-  List.concat [["time"];
-               List.map fst meas.tags;
-               List.map fst meas.fields]
+  List.concat [
+    (match meas.time with
+     | None -> []
+     | Some _ -> ["time"]);
+    List.map fst meas.tags;
+    List.map fst meas.fields
+  ]
     |> enumerate
     |> List.map (Printf.sprintf "$%d")
-    |> map_first (fun x -> Printf.sprintf "to_timestamp(%s)" x)
+    |>
+    match meas.time with
+    | None -> (fun xs -> "CURRENT_TIMESTAMP"::xs)
+    | Some _ -> map_first (fun x -> Printf.sprintf "to_timestamp(%s)" x)
       
 let insert_of_measurement t (meas : Lexer.measurement) =
   let query =
@@ -83,15 +90,18 @@ let insert_of_measurement t (meas : Lexer.measurement) =
     " VALUES (" ^ String.concat "," (db_placeholders meas) ^ ")"
   in
   let params = db_raw_values meas in
-  let timestamp =
-    Printf.sprintf "%s" (
-      (* TODO: what about negative values? Check that 'rem' works as expected *)
-      if t.subsecond_time_field
-      then Printf.sprintf "%Ld.%09Ld" (Int64.div meas.time 1000000000L) (Int64.rem meas.time 1000000000L)
-      else Printf.sprintf "%Ld" (Int64.div meas.time 1000000000L)
-    )
+  let params =
+    match meas.time with
+     | None -> params
+     | Some x ->
+       Printf.sprintf "%s" (
+         (* TODO: what about negative values? Check that 'rem' works as expected *)
+         if t.subsecond_time_field
+         then Printf.sprintf "%Ld.%09Ld" (Int64.div x 1000000000L) (Int64.rem x 1000000000L)
+         else Printf.sprintf "%Ld" (Int64.div x 1000000000L)
+       )::params
   in
-  (query, (timestamp::params) |> Array.of_list)
+  (query, params |> Array.of_list)
 
 let string_of_error error =
   match error with

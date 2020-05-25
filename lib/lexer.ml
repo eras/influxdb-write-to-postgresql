@@ -15,7 +15,7 @@ type measurement = {
   measurement: string;
   tags: (string * string) list;
   fields: (string * value) list;
-  time: int64;
+  time: int64 option;
 }
 
 let string_of_tag (name, value) = Printf.sprintf "tag %s=%s" name value
@@ -26,7 +26,9 @@ let string_of_measurement meas =
   String.concat "" (List.map (fun (tag, value) -> "," ^ tag ^ "=" ^ value) meas.tags) ^
   " " ^
   String.concat "," (List.map (fun (field, value) -> field ^ "=" ^ string_of_value value) meas.fields) ^
-  Int64.to_string meas.time
+  match meas.time with
+  | None -> ""
+  | Some t -> " " ^ Int64.to_string t
 
 (* <measurement>[,<tag_key>=<tag_value>[,<tag_key>=<tag_value>]] <field_key>=<field_value>[,<field_key>=<field_value>] [<timestamp>] *)
 
@@ -172,8 +174,10 @@ let fields buf =
 
 let time buf =
   match%sedlex buf with
-    | integer -> Int64.of_string (Sedlexing.Utf8.lexeme buf)
-    | _ -> log_raise (Error {info = Parse_error; message = "time"})
+  | " ", integer ->
+    let str = Sedlexing.Utf8.lexeme buf in
+    Some (Int64.of_string (String.sub str 1 (String.length str - 1)))
+  | _ -> None (* last field, so we may need to encounter newline as well *)
 
 let rest buf =
   let measurement = Sedlexing.Utf8.lexeme buf in
@@ -181,7 +185,6 @@ let rest buf =
   (* Printf.printf "tags: %s\n%!" (String.concat "," (List.map string_of_tag tags)); *)
   let fields = fields buf in
   (* Printf.printf "fields: %s\n%!" (String.concat "," (List.map string_of_field fields)); *)
-  let _space = space buf in
   let time = time buf in
   { measurement; tags; fields; time }
 

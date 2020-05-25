@@ -54,7 +54,7 @@ let testOnlyFieldInt _ctx =
   flip assert_equal meas.measurement "meas";
   flip assert_equal meas.tags [];
   flip assert_equal meas.fields [("field", Int 42L)];
-  flip assert_equal meas.time 1234L
+  flip assert_equal meas.time (Some 1234L)
 
 let testOnlyFieldFloat _ctx =
   let open Lexer in
@@ -64,7 +64,7 @@ let testOnlyFieldFloat _ctx =
   flip assert_equal meas.measurement "meas";
   flip assert_equal meas.tags [];
   flip assert_equal meas.fields [("field", FloatNum 42.0)];
-  flip assert_equal meas.time 1234L
+  flip assert_equal meas.time (Some 1234L)
 
 let testOnlyFieldString _ctx =
   let open Lexer in
@@ -74,7 +74,7 @@ let testOnlyFieldString _ctx =
   flip assert_equal meas.measurement "meas";
   flip assert_equal meas.tags [];
   flip assert_equal meas.fields [("field", String "moi")];
-  flip assert_equal meas.time 1234L
+  flip assert_equal meas.time (Some 1234L)
 
 let testTagField _ctx =
   let open Lexer in
@@ -84,15 +84,18 @@ let testTagField _ctx =
   flip assert_equal meas.measurement "meas";
   flip assert_equal meas.tags [("id", "55")];
   flip assert_equal meas.fields [("field", Int 42L)];
-  flip assert_equal meas.time 1234L
+  flip assert_equal meas.time (Some 1234L)
 
 
 let testTagFieldNoTime _ctx =
   let open Lexer in
-  flip assert_raises (fun () -> 
-      line (Sedlexing.Utf8.from_string {|meas,id=55 field=42|})
-    )
-    (Error {info=Parse_error; message="space"})
+  let meas = 
+    line (Sedlexing.Utf8.from_string {|meas,id=55 field=42|})
+  in
+  flip assert_equal meas.measurement "meas";
+  flip assert_equal meas.tags [("id", "55")];
+  flip assert_equal meas.fields [("field", Int 42L)];
+  flip assert_equal meas.time None
 
 let testTagFields _ctx =
   let open Lexer in
@@ -102,7 +105,7 @@ let testTagFields _ctx =
   flip assert_equal meas.measurement "meas";
   flip assert_equal meas.tags [("id", "55")];
   flip assert_equal meas.fields [("field", String "moi"); ("field2", Int 44L)];
-  flip assert_equal meas.time 1234L
+  flip assert_equal meas.time (Some 1234L)
 
 let testTagsFields _ctx =
   let open Lexer in
@@ -112,7 +115,7 @@ let testTagsFields _ctx =
   flip assert_equal meas.measurement "meas";
   flip assert_equal meas.tags [("id", "55"); ("borf", {|"plop"|})];
   flip assert_equal meas.fields [("field", String "moi"); ("field2", Int 44L)];
-  flip assert_equal meas.time 1234L
+  flip assert_equal meas.time (Some 1234L)
 
 let testTagQuoting _ctx =
   let open Lexer in
@@ -122,7 +125,7 @@ let testTagQuoting _ctx =
   flip assert_equal meas.measurement "meas";
   flip assert_equal meas.tags [("id", {|"55,42\="|})];
   flip assert_equal meas.fields [("field", String "moi"); ("field2", Int 44L)];
-  flip assert_equal meas.time 1234L
+  flip assert_equal meas.time (Some 1234L)
 
 let testValueQuoting _ctx =
   let open Lexer in
@@ -132,7 +135,7 @@ let testValueQuoting _ctx =
   flip assert_equal meas.measurement "meas";
   flip assert_equal meas.tags [("id", {|1|})];
   flip assert_equal meas.fields [("field", String {|moi"taas|})];
-  flip assert_equal meas.time 1234L
+  flip assert_equal meas.time (Some 1234L)
 
 let testTwo _ctx =
   let open Lexer in
@@ -147,11 +150,30 @@ meas,id=2 field="moi2" 1235|})
   flip assert_equal meas1.measurement "meas";
   flip assert_equal meas1.tags [("id", {|1|})];
   flip assert_equal meas1.fields [("field", String {|moi"taas|})];
-  flip assert_equal meas1.time 1234L;
+  flip assert_equal meas1.time (Some 1234L);
   flip assert_equal meas2.measurement "meas";
   flip assert_equal meas2.tags [("id", {|2|})];
   flip assert_equal meas2.fields [("field", String {|moi2|})];
-  flip assert_equal meas2.time 1235L
+  flip assert_equal meas2.time (Some 1235L)
+  
+let testTwoNoTime _ctx =
+  let open Lexer in
+  let meas1, meas2 =
+    match
+      lines (Sedlexing.Utf8.from_string {|meas,id=1 field="moi\"taas"
+meas,id=2 field="moi2"|})
+    with
+    | meas1::meas2::[] -> (meas1, meas2)
+    | _ -> assert_failure "Invalid number of results from lines"
+  in
+  flip assert_equal meas1.measurement "meas";
+  flip assert_equal meas1.tags [("id", {|1|})];
+  flip assert_equal meas1.fields [("field", String {|moi"taas|})];
+  flip assert_equal meas1.time None;
+  flip assert_equal meas2.measurement "meas";
+  flip assert_equal meas2.tags [("id", {|2|})];
+  flip assert_equal meas2.fields [("field", String {|moi2|})];
+  flip assert_equal meas2.time None
   
 
 let suite = "Infludb_writer_lexer" >::: [
@@ -171,4 +193,5 @@ let suite = "Infludb_writer_lexer" >::: [
   "testTagQuoting" >:: testTagQuoting;
   "testValueQuoting" >:: testValueQuoting;
   "testTwo" >:: testTwo;
+  "testTwoNoTime" >:: testTwoNoTime;
 ]
