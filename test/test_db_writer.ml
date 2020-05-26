@@ -106,14 +106,15 @@ let unvaluefy = function
   | `Exn e -> raise e
 
 let with_db_container f =
-  let container_info = create_db_container () in
+  let container_info = lazy (create_db_container ()) in
   let ret = valuefy f container_info in
-  stop_db_container container_info.ci_id;
+  if Lazy.is_val container_info then
+    stop_db_container (Lazy.force container_info).ci_id;
   unvaluefy ret
 
 type 'db_writer db_test_context = {
   db: 'db_writer;               (* at with_db we don't have this *)
-  conninfo: string;
+  conninfo: string Lazy.t;
 }
 
 let retry f =
@@ -132,29 +133,37 @@ let retry f =
 
 let with_db _ctx f =
   with_db_container @@ fun container_info ->
-  let pg_port = (PortMap.find "5432/tcp" container_info.ci_ports).host_port in
-  let conninfo = "user=postgres password=test host=localhost port=" ^ string_of_int pg_port in
+  let pg_port = lazy ((PortMap.find "5432/tcp" (Lazy.force container_info).ci_ports).host_port) in
+  let conninfo = lazy ("user=postgres password=test host=localhost port=" ^ string_of_int (Lazy.force pg_port)) in
   try
-    let pg = retry @@ fun () ->
-      new Postgresql.connection ~conninfo ()
-    in
-    ignore (pg#exec ~expect:[Postgresql.Command_ok] {|
+    let conninfo =
+      (* trigger this if conninfo is used *)
+      lazy (
+        let conninfo = Lazy.force conninfo in
+        let pg = retry @@ fun () ->
+          new Postgresql.connection ~conninfo ()
+        in
+        ignore (pg#exec ~expect:[Postgresql.Command_ok] {|
 CREATE TABLE meas(time timestamptz NOT NULL,
                   moi1 text,
                   moi2 text);
 CREATE UNIQUE INDEX meas_time_dx ON meas(time);
 |});
-    pg#finish;
+        pg#finish;
+        conninfo
+      )
+    in
     let ret = valuefy f { db = (); conninfo } in
     unvaluefy ret
   with Postgresql.Error error ->
     Printf.ksprintf assert_failure "Postgresql.Error: %s" (Postgresql.string_of_error error)
 
-let with_db_writer (ctx : test_ctxt) (f : Db_writer.t db_test_context -> 'a) : 'a =
+let with_db_writer (ctx : test_ctxt) (f : Db_writer.t Lazy.t db_test_context -> 'a) : 'a =
   with_db ctx @@ fun { conninfo; _ } ->
-  let db = Db_writer.create { Db_writer.conninfo } in
+  let db = lazy (Db_writer.create { Db_writer.conninfo = Lazy.force conninfo }) in
   let ret = valuefy f { db; conninfo } in
-  Db_writer.close db;
+  if Lazy.is_val db then
+    Db_writer.close (Lazy.force db);
   (match ret with
    | `Exn (Db_writer.Error error) ->
      logf ctx `Error "Db_writer.Error: %s" (Db_writer.string_of_error error)
@@ -171,6 +180,7 @@ let testDbOfIdentifier _ctx =
 
 let testInsert ctx =
   with_db_writer ctx @@ fun { db; _ } ->
+  let db = Lazy.force db in
   let meas = {
     Lexer.measurement = "meas";
     tags = [("moi1", "1");("moi2", "2")];
@@ -184,6 +194,7 @@ let testInsert ctx =
 
 let testInsertNoTime ctx =
   with_db_writer ctx @@ fun { db; _ } ->
+  let db = Lazy.force db in
   let meas = {
     Lexer.measurement = "meas";
     tags = [("moi1", "1");("moi2", "2")];
@@ -197,6 +208,7 @@ let testInsertNoTime ctx =
 
 let testWrite ctx =
   with_db_writer ctx @@ fun { db; _ } ->
+  let db = Lazy.force db in
   let meas = {
     Lexer.measurement = "meas";
     tags = [("moi1", "1");("moi2", "2")];
@@ -211,6 +223,7 @@ let testWrite ctx =
 
 let testWriteNoTime ctx =
   with_db_writer ctx @@ fun { db; _ } ->
+  let db = Lazy.force db in
   let meas = {
     Lexer.measurement = "meas";
     tags = [("moi1", "1");("moi2", "2")];
