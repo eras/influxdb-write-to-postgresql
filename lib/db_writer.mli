@@ -8,11 +8,15 @@ type error =
 
 exception Error of error
 
+type config = {
+  conninfo : string;
+}
+
 (** [string_of_error error] converts the error to a string *)
 val string_of_error : error -> string
 
 (** [create conninfo] connects to the given database; can raise PgError if it fails *)
-val create : conninfo:string -> t
+val create : config -> t
 
 (** [close t] disconnects from the database. Can raise. *)
 val close : t -> unit

@@ -4,7 +4,7 @@ module Lexer = Influxdb_write_to_postgresql.Lexer
 module Db_writer = Influxdb_write_to_postgresql.Db_writer
 
 let make_db _ctx =
-  Db_writer.create ~conninfo:"service=dbwriter_test"
+  Db_writer.create { Db_writer.conninfo = "service=dbwriter_test" }
 
 let testCreate ctx =
   let db = make_db ctx in

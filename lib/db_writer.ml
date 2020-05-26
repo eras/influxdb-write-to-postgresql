@@ -4,6 +4,10 @@ type quote_mode = QuoteAlways
 
 module FieldMap = Map.Make(struct type t = string let compare = compare end)
 
+type config = {
+  conninfo : string;
+}
+
 type field_type =
   | FT_String
   | FT_Int
@@ -167,8 +171,9 @@ end
 
 open Internal
 
-let create ~conninfo =
+let create (config : config) =
   try
+    let conninfo = config.conninfo in
     let db = new Pg.connection ~conninfo () in
     let quote_mode = QuoteAlways in
     let quoted_time_field = db_of_identifier "time" in

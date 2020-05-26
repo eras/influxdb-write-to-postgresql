@@ -13,7 +13,7 @@ let server =
       Printf.eprintf "Environment variable %s not provided, exiting\n" conninfo_env_name;
       exit 1
   in
-  let db = Db_writer.create ~conninfo in
+  let db = Db_writer.create { Db_writer.conninfo } in
   let callback _conn req body =
     let uri = req |> Request.uri |> Uri.to_string in
     let meth = req |> Request.meth |> Code.string_of_method in
