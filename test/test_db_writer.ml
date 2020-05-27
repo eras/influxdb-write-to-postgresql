@@ -188,9 +188,12 @@ let with_db_writer (ctx : test_ctxt) (f : Db_writer.t Lazy.t db_test_context -> 
 let testCreate ctx =
   with_db_writer ctx @@ fun _ -> ()
 
+let identity x = x
+
 let testDbOfIdentifier _ctx =
-  let s = Db_writer.Internal.db_of_identifier "moi" in
-  assert_equal s {|"moi"|}
+  assert_equal ~printer:identity {|moi|} (Db_writer.Internal.db_of_identifier "moi");
+  assert_equal ~printer:identity {|U&"moi\0020"|} (Db_writer.Internal.db_of_identifier "moi ");
+  assert_equal ~printer:identity {|U&"tidii\2603"|} (Db_writer.Internal.db_of_identifier "tidii☃")
 
 let testInsert ctx =
   with_db_writer ctx @@ fun { db; _ } ->
@@ -202,8 +205,7 @@ let testInsert ctx =
     time = Some 1590329952000000000L;
   } in
   let query = Db_writer.Internal.insert_of_measurement db meas in
-  (* Printf.fprintf stderr "query: %s\n%!" (fst query); *)
-  assert_equal (fst query) {|INSERT INTO "meas"("time", "moi1", "moi2") VALUES (to_timestamp($1),$2,$3) ON CONFLICT("time") DO UPDATE SET "moi1"=excluded."moi1", "moi2"=excluded."moi2"|};
+  assert_equal ~printer:identity {|INSERT INTO meas(time, moi1, moi2) VALUES (to_timestamp($1),$2,$3) ON CONFLICT(time) DO UPDATE SET moi1=excluded.moi1, moi2=excluded.moi2|} (fst query);
   assert_equal (snd query) [|"1590329952"; "1"; "2"|]
 
 let testInsertNoTime ctx =
@@ -216,8 +218,7 @@ let testInsertNoTime ctx =
     time = None;
   } in
   let query = Db_writer.Internal.insert_of_measurement db meas in
-  (* Printf.fprintf stderr "query: %s\n%!" (fst query); *)
-  assert_equal (fst query) {|INSERT INTO "meas"("time", "moi1", "moi2") VALUES (CURRENT_TIMESTAMP,$1,$2) ON CONFLICT("time") DO UPDATE SET "moi1"=excluded."moi1", "moi2"=excluded."moi2"|};
+  assert_equal ~printer:identity {|INSERT INTO meas(time, moi1, moi2) VALUES (CURRENT_TIMESTAMP,$1,$2) ON CONFLICT(time) DO UPDATE SET moi1=excluded.moi1, moi2=excluded.moi2|} (fst query);
   assert_equal (snd query) [|"1"; "2"|]
 
 let testWrite ctx =

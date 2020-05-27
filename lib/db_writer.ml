@@ -54,6 +54,7 @@ let create_column_info () = Hashtbl.create 10
 
 type error =
   | PgError of Pg.error
+  | MalformedUTF8
 
 exception Error of error
 
@@ -71,25 +72,49 @@ end
 
 module Internal =
 struct
+  let is_unquoted_ascii x =
+    let i = Uchar.to_int x in
+    if i >= 1 && i <= 127 then
+      let c = Uchar.to_char x in
+      (c >= 'a' && c <= 'z')
+      || (c >= 'A' && c <= 'Z')
+      || (c >= '0' && c <= '9')
+      || (c == '-') || (c == '_')
+    else
+      false
+
   let db_of_identifier str =
     let out = Buffer.create (String.length str) in
-    let buf = Sedlexing.Utf8.from_string str in
-    Buffer.add_char out '"';
+    Buffer.add_string out "U&\"";
+    let decoder = Uutf.decoder ~encoding:`UTF_8 (`String str) in
+    let any_special = ref false in
     let rec loop () =
-      match%sedlex buf with
-      | '"' ->
-        Buffer.add_string out "\\\"";
+      match Uutf.decode decoder with
+      | `Await -> assert false
+      | `Uchar x when x == Uchar.of_char '\\' || x == Uchar.of_char '"' ->
+        any_special := true;
+        Buffer.add_char out '\\';
+        Buffer.add_char out (Uchar.to_char x);
         loop ()
-      | Star(Sub(any, '"')) ->
-        let lexstr = Sedlexing.Utf8.lexeme buf in
-        if String.length lexstr = 0 then (
-          Buffer.add_char out '"';
-          Buffer.contents out
-        ) else (
-          Buffer.add_string out str;
-          loop ()
-        )
-      | _ -> assert false
+      | `Uchar x when is_unquoted_ascii x ->
+        Buffer.add_char out (Uchar.to_char x);
+        loop ()
+      | `Uchar x when Uchar.to_int x < (1 lsl 16) ->
+        any_special := true;
+        Printf.ksprintf (Buffer.add_string out) "\\%04x" (Uchar.to_int x);
+        loop ()
+      | `Uchar x when Uchar.to_int x < (1 lsl 24) ->
+        any_special := true;
+        Printf.ksprintf (Buffer.add_string out) "\\+%06x" (Uchar.to_int x);
+        loop ()
+      | `Uchar _ | `Malformed _ ->
+        any_special := true;
+        raise (Error MalformedUTF8)
+      | `End when !any_special ->
+        Buffer.add_char out '"';
+        Buffer.contents out
+      | `End ->
+        str (* return original identifier as nothing special was done *)
     in
     loop ()
 
@@ -197,6 +222,7 @@ let reconnect t =
 let string_of_error error =
   match error with
   | PgError error -> Pg.string_of_error error
+  | MalformedUTF8 -> "Malformed UTF8"
 
 (** Ensure database has the columns we need *)
 let update_columns t table_name values =

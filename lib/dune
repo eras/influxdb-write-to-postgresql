@@ -1,4 +1,4 @@
 (library
  (public_name influxdb_write_to_postgresql)
- (libraries lwt postgresql cohttp-lwt-unix sedlex)
+ (libraries lwt postgresql cohttp-lwt-unix sedlex uutf)
  (preprocess (pps lwt_ppx sedlex.ppx)))

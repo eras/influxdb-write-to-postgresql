@@ -5,6 +5,7 @@ type quote_mode = QuoteAlways
 type t
 type error =
   | PgError of Pg.error
+  | MalformedUTF8
 
 exception Error of error
 
