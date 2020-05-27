@@ -105,12 +105,11 @@ let unvaluefy = function
   | `Value x -> x
   | `Exn e -> raise e
 
-let with_db_container f =
-  let container_info = lazy (create_db_container ()) in
-  let ret = valuefy f container_info in
-  if Lazy.is_val container_info then
-    stop_db_container (Lazy.force container_info).ci_id;
-  unvaluefy ret
+let container_info = lazy (
+  let container_info = create_db_container () in
+  at_exit (fun () -> stop_db_container container_info.ci_id);
+  container_info
+)
 
 type 'db_writer db_test_context = {
   db: 'db_writer;               (* at with_db we don't have this *)
@@ -131,8 +130,30 @@ let retry f =
   in
   unvaluefy (loop 5 None)
 
+let create_new_database =
+  let db_id_counter = ref 0 in
+  fun conninfo ->
+    let name = Printf.sprintf "test_db_%03d" !db_id_counter in
+    let _ = incr db_id_counter in
+    let pg = retry @@ fun () ->
+      new Postgresql.connection ~conninfo ()
+    in
+    ignore (pg#exec ~expect:[Postgresql.Command_ok] (Printf.sprintf {|
+CREATE DATABASE %s
+|} (Db_writer.Internal.db_of_identifier name)));
+    pg#finish;
+    let conninfo_with_dbname = (conninfo ^ " dbname=" ^ name) in
+    let pg = new Postgresql.connection ~conninfo:conninfo_with_dbname () in
+    ignore (pg#exec ~expect:[Postgresql.Command_ok] {|
+CREATE TABLE meas(time timestamptz NOT NULL,
+                  moi1 text,
+                  moi2 text);
+CREATE UNIQUE INDEX meas_time_dx ON meas(time);
+|});
+    pg#finish;
+    conninfo_with_dbname
+
 let with_db _ctx f =
-  with_db_container @@ fun container_info ->
   let pg_port = lazy ((PortMap.find "5432/tcp" (Lazy.force container_info).ci_ports).host_port) in
   let conninfo = lazy ("user=postgres password=test host=localhost port=" ^ string_of_int (Lazy.force pg_port)) in
   try
@@ -140,16 +161,7 @@ let with_db _ctx f =
       (* trigger this if conninfo is used *)
       lazy (
         let conninfo = Lazy.force conninfo in
-        let pg = retry @@ fun () ->
-          new Postgresql.connection ~conninfo ()
-        in
-        ignore (pg#exec ~expect:[Postgresql.Command_ok] {|
-CREATE TABLE meas(time timestamptz NOT NULL,
-                  moi1 text,
-                  moi2 text);
-CREATE UNIQUE INDEX meas_time_dx ON meas(time);
-|});
-        pg#finish;
+        let conninfo = create_new_database conninfo in
         conninfo
       )
     in
