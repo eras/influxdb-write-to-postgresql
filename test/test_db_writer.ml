@@ -148,9 +148,7 @@ CREATE DATABASE %s
     let conninfo_with_dbname = (conninfo ^ " dbname=" ^ name) in
     let pg = new Postgresql.connection ~conninfo:conninfo_with_dbname () in
     ignore (pg#exec ~expect:[Postgresql.Command_ok] {|
-CREATE TABLE meas(time timestamptz NOT NULL,
-                  moi1 text,
-                  moi2 text);
+CREATE TABLE meas(time timestamptz NOT NULL);
 CREATE UNIQUE INDEX meas_time_dx ON meas(time);
 |});
     pg#finish;
