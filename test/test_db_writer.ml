@@ -173,7 +173,8 @@ let with_db _ctx f =
 
 let with_db_writer (ctx : test_ctxt) (f : Db_writer.t Lazy.t db_test_context -> 'a) : 'a =
   with_db ctx @@ fun { conninfo; _ } ->
-  let db = lazy (Db_writer.create { Db_writer.conninfo = Lazy.force conninfo }) in
+  let db = lazy (Db_writer.create { Db_writer.conninfo = Lazy.force conninfo;
+                                    time_field = "time" }) in
   let ret = valuefy f { db; conninfo } in
   if Lazy.is_val db then
     Db_writer.close (Lazy.force db);

@@ -10,6 +10,7 @@ exception Error of error
 
 type config = {
   conninfo : string;
+  time_field : string;
 }
 
 (** [string_of_error error] converts the error to a string *)

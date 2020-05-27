@@ -6,6 +6,7 @@ module FieldMap = Map.Make(struct type t = string let compare = compare end)
 
 type config = {
   conninfo : string;
+  time_field : string;
 }
 
 type field_type =
@@ -176,7 +177,7 @@ let create (config : config) =
     let conninfo = config.conninfo in
     let db = new Pg.connection ~conninfo () in
     let quote_mode = QuoteAlways in
-    let quoted_time_field = db_of_identifier "time" in
+    let quoted_time_field = db_of_identifier (config.time_field) in
     let subsecond_time_field = false in
     let known_columns = query_column_info db in
     { db; quote_mode; quoted_time_field; subsecond_time_field;
