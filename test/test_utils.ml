@@ -151,22 +151,18 @@ CREATE UNIQUE INDEX meas_time_dx ON meas(time);
     pg#finish;
     conninfo_with_dbname
 
-let with_db _ctx f =
+let with_conninfo _ctx f =
   let pg_port = lazy ((PortMap.find "5432/tcp" (Lazy.force container_info).ci_ports).host_port) in
   let conninfo = lazy ("user=postgres password=test host=localhost port=" ^ string_of_int (Lazy.force pg_port)) in
   try
-    let conninfo =
-      (* trigger this if conninfo is used *)
-      lazy (
-        let conninfo = Lazy.force conninfo in
-        let conninfo = create_new_database conninfo in
-        conninfo
-      )
-    in
-    let ret = valuefy f { db = (); conninfo } in
-    unvaluefy ret
+    f { db = (); conninfo }
   with Postgresql.Error error ->
     Printf.ksprintf OUnit2.assert_failure "Postgresql.Error: %s" (Postgresql.string_of_error error)
+
+let with_db ctx f =
+  with_conninfo ctx @@ fun { conninfo; db = () } ->
+  let conninfo = lazy (create_new_database (Lazy.force conninfo)) in
+  f { db = (); conninfo; }
 
 let with_db_writer (ctx : OUnit2.test_ctxt) (f : Db_writer.t Lazy.t db_test_context -> 'a) : 'a =
   with_db ctx @@ fun { conninfo; _ } ->
