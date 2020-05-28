@@ -70,19 +70,18 @@ struct
     | Some x -> x
 end
 
+let is_unquoted_ascii x =
+  let i = Uchar.to_int x in
+  if i >= 1 && i <= 127 then
+    let c = Uchar.to_char x in
+    (c >= 'a' && c <= 'z')
+    || (c >= '0' && c <= '9')
+    || (c == '_')
+  else
+    false
+
 module Internal =
 struct
-  let is_unquoted_ascii x =
-    let i = Uchar.to_int x in
-    if i >= 1 && i <= 127 then
-      let c = Uchar.to_char x in
-      (c >= 'a' && c <= 'z')
-      || (c >= 'A' && c <= 'Z')
-      || (c >= '0' && c <= '9')
-      || (c == '-') || (c == '_')
-    else
-      false
-
   let db_of_identifier str =
     let out = Buffer.create (String.length str) in
     Buffer.add_string out "U&\"";

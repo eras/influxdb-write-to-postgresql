@@ -31,6 +31,8 @@ val reconnect : t -> unit
     Can raise PgError *)
 val write : t -> Lexer.measurement list -> unit
 
+val is_unquoted_ascii : Uchar.t -> bool
+
 (** exposed for unit testing *)
 module Internal: sig
   val db_of_identifier : string -> string
