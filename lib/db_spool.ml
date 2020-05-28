@@ -6,9 +6,14 @@ type config = {
 
 module DatabaseNameMap = Map.Make(struct type t = string let compare = compare end)
 
+type db_status = {
+  conninfo: conninfo;
+  mutable available: Db_writer.t list;
+}
+
 type t = {
   config: config;
-  mutable dbs: conninfo DatabaseNameMap.t;
+  mutable dbs: db_status DatabaseNameMap.t;
 }
 
 type db_info = {
@@ -31,17 +36,31 @@ let validate_name name =
 
 let create config =
   List.iter (fun (name, _) -> ignore (validate_name name)) config.databases;
-  let dbs = List.to_seq config.databases |> DatabaseNameMap.of_seq in
+  let dbs =
+    List.to_seq config.databases
+    |> Seq.map (fun (name, conninfo) ->
+        (name, { conninfo; available = [] })
+      )
+    |> DatabaseNameMap.of_seq in
   { config; dbs }
+
+let release db_status db () =
+  db_status.available <- db::db_status.available
 
 let db t name =
   match DatabaseNameMap.find name t.dbs with
   | exception Not_found -> None
-  | conninfo ->
-    let config = {
-      Db_writer.conninfo;
-      time_field = "time"
-    } in
-    let db = Db_writer.create config in
-    let release = ignore in
-    Some { db; release }
+  | db_status ->
+    match db_status.available with
+    | [] ->
+      let config = {
+        Db_writer.conninfo = db_status.conninfo;
+        time_field = "time"
+      } in
+      let db = Db_writer.create config in
+      let release = release db_status db in
+      Some { db; release }
+    | db::xs ->
+      db_status.available <- xs;
+      let release = release db_status db in
+      Some { db; release }
