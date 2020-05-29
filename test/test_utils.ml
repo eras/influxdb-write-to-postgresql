@@ -112,7 +112,7 @@ let container_info = lazy (
 )
 
 type 'db_writer db_test_context = {
-  db: 'db_writer;               (* at with_db we don't have this *)
+  db: 'db_writer;               (* at with_new_db we don't have this *)
   conninfo: string Lazy.t;
 }
 
@@ -159,13 +159,13 @@ let with_conninfo _ctx f =
   with Postgresql.Error error ->
     Printf.ksprintf OUnit2.assert_failure "Postgresql.Error: %s" (Postgresql.string_of_error error)
 
-let with_db ctx f =
+let with_new_db ctx f =
   with_conninfo ctx @@ fun { conninfo; db = () } ->
   let conninfo = lazy (create_new_database (Lazy.force conninfo)) in
   f { db = (); conninfo; }
 
 let with_db_writer (ctx : OUnit2.test_ctxt) (f : Db_writer.t Lazy.t db_test_context -> 'a) : 'a =
-  with_db ctx @@ fun { conninfo; _ } ->
+  with_new_db ctx @@ fun { conninfo; _ } ->
   let db = lazy (Db_writer.create { Db_writer.conninfo = Lazy.force conninfo;
                                     time_field = "time" }) in
   let ret = valuefy f { db; conninfo } in
