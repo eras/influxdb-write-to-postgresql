@@ -46,8 +46,8 @@ type t = {
   quote_mode: quote_mode;
   quoted_time_field: string;
   subsecond_time_field: bool;
+  config: config;
   mutable known_columns: column_info;
-  conninfo: string; (* used for reconnecting *)
 }
 
 let create_column_info () = Hashtbl.create 10
@@ -198,15 +198,14 @@ open Internal
 
 let create (config : config) =
   try
-    let conninfo = config.conninfo in
-    let db = new Pg.connection ~conninfo () in
+    let db = new Pg.connection ~conninfo:config.conninfo () in
     let quote_mode = QuoteAlways in
     let quoted_time_field = db_of_identifier (config.time_field) in
     let subsecond_time_field = false in
     let known_columns = query_column_info db in
     { db; quote_mode; quoted_time_field; subsecond_time_field;
       known_columns;
-      conninfo }
+      config }
   with Pg.Error error ->
     raise (Error (PgError error))
 
@@ -216,7 +215,7 @@ let close t =
 let reconnect t =
   ( try close t
     with _ -> (* eat *) () );
-  t.db <- new Pg.connection ~conninfo:t.conninfo ()
+  t.db <- new Pg.connection ~conninfo:t.config.conninfo ()
 
 let string_of_error error =
   match error with
