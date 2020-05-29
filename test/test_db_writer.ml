@@ -9,6 +9,7 @@ let identity x = x
 
 let testDbOfIdentifier _ctx =
   assert_equal ~printer:identity {|moi|} (Db_writer.Internal.db_of_identifier "moi");
+  assert_equal ~printer:identity {|U&"Moi"|} (Db_writer.Internal.db_of_identifier "Moi");
   assert_equal ~printer:identity {|U&"moi\0020"|} (Db_writer.Internal.db_of_identifier "moi ");
   assert_equal ~printer:identity {|U&"tidii\2603"|} (Db_writer.Internal.db_of_identifier "tidii☃")
 

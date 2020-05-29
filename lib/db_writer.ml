@@ -80,6 +80,17 @@ let is_unquoted_ascii x =
   else
     false
 
+let is_unescaped_ascii x =
+  let i = Uchar.to_int x in
+  if i >= 1 && i <= 127 then
+    let c = Uchar.to_char x in
+    (c >= 'a' && c <= 'z')
+    || (c >= 'A' && c <= 'Z')
+    || (c >= '0' && c <= '9')
+    || (c == '_')
+  else
+    false
+
 module Internal =
 struct
   let db_of_identifier str =
@@ -96,6 +107,10 @@ struct
         Buffer.add_char out (Uchar.to_char x);
         loop ()
       | `Uchar x when is_unquoted_ascii x ->
+        Buffer.add_char out (Uchar.to_char x);
+        loop ()
+      | `Uchar x when is_unescaped_ascii x ->
+        any_special := true;
         Buffer.add_char out (Uchar.to_char x);
         loop ()
       | `Uchar x when Uchar.to_int x < (1 lsl 16) ->
