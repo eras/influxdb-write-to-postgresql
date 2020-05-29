@@ -121,11 +121,6 @@ let equals buf =
   | '=' -> (Sedlexing.Utf8.lexeme buf)
   | _ -> log_raise (Error {info = Parse_error; message = "equal sign"})
 
-let space buf =
-  match%sedlex buf with
-  | ' ' -> (Sedlexing.Utf8.lexeme buf)
-  | _ -> log_raise (Error {info = Parse_error; message = "space"})
-
 let string str =
   unquote_field_value (Sedlexing.Utf8.from_string (String.sub str 1 (String.length str - 2)))
 
