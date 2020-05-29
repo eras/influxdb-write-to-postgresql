@@ -18,6 +18,11 @@ type measurement = {
   time: int64 option;
 }
 
+let make_measurement ~measurement ~tags ~fields ~time =
+  assert (measurement <> "");
+  assert (fields <> []);
+  { measurement; tags; fields; time }
+
 let string_of_tag (name, value) = Printf.sprintf "tag %s=%s" name value
 let string_of_field (name, value) = Printf.sprintf "field %s=%s" name (string_of_value value)
 
