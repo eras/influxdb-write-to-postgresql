@@ -39,7 +39,7 @@ let testInsertNoTime ctx =
   assert_equal (snd query) [|"1"; "2"|]
 
 let testWrite ctx =
-  Test_utils.with_db_writer ctx @@ fun { db; _ } ->
+  Test_utils.with_db_writer ctx @@ fun { db; conninfo } ->
   let db = Lazy.force db in
   let meas = {
     Lexer.measurement = "meas";
@@ -49,12 +49,22 @@ let testWrite ctx =
   } in
   (try
      ignore (Db_writer.write db [meas]);
+     let direct = new Postgresql.connection ~conninfo:(Lazy.force conninfo) () in
+     let result = direct#exec ~expect:[Postgresql.Tuples_ok] "SELECT extract(epoch from time), moi1, moi2 FROM meas" in
+     match result#get_all_lst with
+     | [[time; moi1; moi2]] ->
+       let time = float_of_string time in
+       assert_equal ~printer:string_of_float 1590329952.0 time;
+       assert_equal ~printer:identity "1" moi1;
+       assert_equal ~printer:identity "2" moi2
+     | _ ->
+       assert_failure "Unexpected results"
    with
    | Db_writer.Error error ->
      Printf.fprintf stderr "Db_writer error: %s\n%!" (Db_writer.string_of_error error))
 
 let testWriteNoTime ctx =
-  Test_utils.with_db_writer ctx @@ fun { db; _ } ->
+  Test_utils.with_db_writer ctx @@ fun { db; conninfo } ->
   let db = Lazy.force db in
   let meas = {
     Lexer.measurement = "meas";
@@ -64,6 +74,17 @@ let testWriteNoTime ctx =
   } in
   (try
      ignore (Db_writer.write db [meas]);
+     let direct = new Postgresql.connection ~conninfo:(Lazy.force conninfo) () in
+     let result = direct#exec ~expect:[Postgresql.Tuples_ok] "SELECT extract(epoch from now() - time), moi1, moi2 FROM meas" in
+     match result#get_all_lst with
+     | [[delta; moi1; moi2]] ->
+       let delta = float_of_string delta in
+       assert_bool "Time delta is negative" (delta >= 0.0);
+       assert_bool "Time delta is too big" (delta <= 10.0);
+       assert_equal ~printer:identity "1" moi1;
+       assert_equal ~printer:identity "2" moi2
+     | _ ->
+       assert_failure "Unexpected results"
    with
    | Db_writer.Error error ->
      Printf.fprintf stderr "Db_writer error: %s\n%!" (Db_writer.string_of_error error))
