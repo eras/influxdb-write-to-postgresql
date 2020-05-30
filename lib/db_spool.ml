@@ -55,7 +55,8 @@ let db t name =
     | [] ->
       let config = {
         Db_writer.conninfo = db_status.conninfo;
-        time_field = "time"
+        time_field = "time";
+        tags_column = None;
       } in
       let db = Db_writer.create config in
       let release = release db_status db in

@@ -162,10 +162,14 @@ let with_new_db ctx schema f =
   let conninfo = lazy (create_new_database schema (Lazy.force conninfo)) in
   f { db = (); conninfo; }
 
-let with_db_writer (ctx : OUnit2.test_ctxt) (f : Db_writer.t Lazy.t db_test_context -> 'a) : 'a =
-  with_new_db ctx @@ fun { conninfo; _ } ->
-  let db = lazy (Db_writer.create { Db_writer.conninfo = Lazy.force conninfo;
-                                    time_field = "time" }) in
+let make_db_writer_config conninfo =
+  { Db_writer.conninfo = Lazy.force conninfo;
+    time_field = "time";
+    tags_column = None; }
+
+let with_db_writer ?(make_config=make_db_writer_config) (ctx : OUnit2.test_ctxt) ~schema (f : Db_writer.t Lazy.t db_test_context -> 'a) : 'a =
+  with_new_db ctx schema @@ fun { conninfo; _ } ->
+  let db = lazy (Db_writer.create (make_config conninfo)) in
   let ret = valuefy f { db; conninfo } in
   if Lazy.is_val db then
     Db_writer.close (Lazy.force db);

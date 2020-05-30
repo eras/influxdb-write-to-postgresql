@@ -6,12 +6,14 @@ type t
 type error =
   | PgError of Pg.error
   | MalformedUTF8
+  | CannotAddTags of string list
 
 exception Error of error
 
 type config = {
   conninfo : string;
   time_field : string;
+  tags_column: string option;   (* using tags column? then this is its name *)
 }
 
 (** [string_of_error error] converts the error to a string *)
