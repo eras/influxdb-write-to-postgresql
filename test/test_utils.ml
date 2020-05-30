@@ -177,6 +177,8 @@ let with_db_writer ?(make_config=make_db_writer_config) (ctx : OUnit2.test_ctxt)
   (match ret with
    | `Exn (Db_writer.Error error, raw_backtrace) ->
      OUnit2.logf ctx `Error "Db_writer.Error: %s\nBacktrace: %s" (Db_writer.string_of_error error) (Printexc.raw_backtrace_to_string raw_backtrace)
+   | `Exn (Sql_types.Error error, raw_backtrace) ->
+     OUnit2.logf ctx `Error "Sql_types.Error: %s\nBacktrace: %s" (Sql_types.string_of_error error) (Printexc.raw_backtrace_to_string raw_backtrace)
    | _ -> ()
   );
   unvaluefy ret
