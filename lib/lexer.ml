@@ -69,6 +69,11 @@ let log_raise error =
 let string_of_error error =
   error.message
 
+let _ = Printexc.register_printer (function
+    | Error error -> Some (string_of_error error)
+    | _ -> None
+  )
+
 let identifier buf =
   match%sedlex buf with
   | identifier -> (Sedlexing.Utf8.lexeme buf)

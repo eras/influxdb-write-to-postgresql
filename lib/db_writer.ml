@@ -271,6 +271,11 @@ let string_of_error error =
   | MalformedUTF8 -> "Malformed UTF8"
   | CannotAddTags tags -> "Cannot add tags " ^ String.concat ", " (List.map db_of_identifier tags)
 
+let _ = Printexc.register_printer (function
+    | Error error -> Some (string_of_error error)
+    | _ -> None
+  )
+
 (** Ensure database has the columns we need *)
 let check_and_update_columns ~kind t table_name values =
   let missing_columns, new_columns =

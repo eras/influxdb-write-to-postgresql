@@ -28,6 +28,11 @@ let string_of_error = function
 
 exception Error of error
 
+let _ = Printexc.register_printer (function
+    | Error error -> Some (string_of_error error)
+    | _ -> None
+  )
+
 let string_of_value = function
   | V_Integer x -> Int64.to_string x
   | V_String x -> x
