@@ -28,12 +28,15 @@ CREATE UNIQUE INDEX meas_time_idx ON meas(time);
     Lexer.make_measurement
       ~measurement:"meas"
       ~tags:[("moi1", "1");("moi2", "2")]
-      ~fields:[]
+      ~fields:[("value", Lexer.Int 42L)]
       ~time:(Some 1590329952000000000L)
   in
   let query = Db_writer.Internal.insert_of_measurement db meas in
-  assert_equal ~printer:identity {|INSERT INTO meas(time, moi1, moi2) VALUES (to_timestamp($1),$2,$3) ON CONFLICT(time) DO UPDATE SET moi1=excluded.moi1, moi2=excluded.moi2|} (fst query);
-  assert_equal (snd query) [|"1590329952"; "1"; "2"|]
+  assert_equal ~printer:identity {|INSERT INTO meas(time, moi1, moi2, value)
+VALUES (to_timestamp($1), $2, $3, $4)
+ON CONFLICT(time, moi1, moi2)
+DO UPDATE SET value=excluded.value|} (fst query);
+  assert_equal ~printer:(fun x -> Array.to_list x |> String.concat ",") (snd query) [|"1590329952"; "1"; "2"; "42"|]
 
 let testInsertNoTime ctx =
   let schema = {|
@@ -46,12 +49,17 @@ CREATE UNIQUE INDEX meas_time_idx ON meas(time, moi1, moi2);
     Lexer.make_measurement
       ~measurement:"meas"
       ~tags:[("moi1", "1");("moi2", "2")]
-      ~fields:[]
+      ~fields:[("value", Lexer.Int 42L)]
       ~time:None
   in
   let query = Db_writer.Internal.insert_of_measurement db meas in
-  assert_equal ~printer:identity {|INSERT INTO meas(time, moi1, moi2) VALUES (CURRENT_TIMESTAMP,$1,$2) ON CONFLICT(time) DO UPDATE SET moi1=excluded.moi1, moi2=excluded.moi2|} (fst query);
-  assert_equal (snd query) [|"1"; "2"|]
+  assert_equal ~printer:identity {|INSERT INTO meas(time, moi1, moi2, value)
+VALUES (CURRENT_TIMESTAMP, $1, $2, $3)
+ON CONFLICT(time, moi1, moi2)
+DO UPDATE SET value=excluded.value|} (fst query);
+  assert_equal ~printer:(fun x -> Array.to_list x |> String.concat ",")
+    [|"1"; "2"; "42"|]
+    (snd query)
 
 let testWrite ctx =
   let schema = {|
@@ -64,19 +72,20 @@ CREATE UNIQUE INDEX meas_time_idx ON meas(time, moi1, moi2);
     Lexer.make_measurement
       ~measurement:"meas"
       ~tags:[("moi1", "1");("moi2", "2")]
-      ~fields:[]
+      ~fields:[("value", Lexer.Int 42L)]
       ~time:(Some 1590329952000000000L)
   in
   (try
      ignore (Db_writer.write db [meas]);
      let direct = new Postgresql.connection ~conninfo:(Lazy.force conninfo) () in
-     let result = direct#exec ~expect:[Postgresql.Tuples_ok] "SELECT extract(epoch from time), moi1, moi2 FROM meas" in
+     let result = direct#exec ~expect:[Postgresql.Tuples_ok] "SELECT extract(epoch from time), moi1, moi2, value FROM meas" in
      match result#get_all_lst with
-     | [[time; moi1; moi2]] ->
+     | [[time; moi1; moi2; value]] ->
        let time = float_of_string time in
        assert_equal ~printer:string_of_float 1590329952.0 time;
        assert_equal ~printer:identity "1" moi1;
-       assert_equal ~printer:identity "2" moi2
+       assert_equal ~printer:identity "2" moi2;
+       assert_equal ~printer:identity "42" value
      | _ ->
        assert_failure "Unexpected results"
    with
@@ -94,20 +103,26 @@ CREATE UNIQUE INDEX meas_time_idx ON meas(time, moi1, moi2);
     Lexer.make_measurement
       ~measurement:"meas"
       ~tags:[("moi1", "1");("moi2", "2")]
-      ~fields:[]
+      ~fields:[("value", Lexer.Int 42L)]
       ~time:None
   in
   (try
      ignore (Db_writer.write db [meas]);
      let direct = new Postgresql.connection ~conninfo:(Lazy.force conninfo) () in
-     let result = direct#exec ~expect:[Postgresql.Tuples_ok] "SELECT extract(epoch from now() - time), moi1, moi2 FROM meas" in
+     let result = direct#exec ~expect:[Postgresql.Tuples_ok] "SELECT extract(epoch from now() - time), moi1, moi2, value FROM meas" in
      match result#get_all_lst with
-     | [[delta; moi1; moi2]] ->
+     | [[delta; moi1; moi2; value]] ->
        let delta = float_of_string delta in
        assert_bool "Time delta is negative" (delta >= 0.0);
        assert_bool "Time delta is too big" (delta <= 10.0);
        assert_equal ~printer:identity "1" moi1;
-       assert_equal ~printer:identity "2" moi2
+       assert_equal ~printer:identity "2" moi2;
+       assert_equal ~printer:identity "42" value
+     | _ ->
+       assert_failure "Unexpected results"
+   with
+   | Db_writer.Error error ->
+     Printf.ksprintf assert_failure "Db_writer error: %s" (Db_writer.string_of_error error))
      | _ ->
        assert_failure "Unexpected results"
    with
