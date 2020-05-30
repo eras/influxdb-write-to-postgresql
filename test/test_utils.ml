@@ -99,11 +99,12 @@ let stop_db_container id =
 
 let valuefy f x =
   try `Value (f x)
-  with exn -> `Exn exn
+  with exn -> `Exn (exn, Printexc.get_raw_backtrace ())
 
 let unvaluefy = function
   | `Value x -> x
-  | `Exn e -> raise e
+  | `Exn (e, raw_backtrace) ->
+    Printexc.raise_with_backtrace e raw_backtrace
 
 let container_info = lazy (
   let container_info = create_db_container () in
@@ -123,7 +124,7 @@ let retry f =
       | x -> `Value x
       | exception (_ as exn) ->
         Unix.sleepf 1.0;
-        loop (n - 1) (Some exn)
+        loop (n - 1) (Some (exn, Printexc.get_raw_backtrace ()))
     ) else match exn with
       | None -> assert false
       | Some exn -> `Exn exn
@@ -172,8 +173,8 @@ let with_db_writer (ctx : OUnit2.test_ctxt) (f : Db_writer.t Lazy.t db_test_cont
   if Lazy.is_val db then
     Db_writer.close (Lazy.force db);
   (match ret with
-   | `Exn (Db_writer.Error error) ->
-     OUnit2.logf ctx `Error "Db_writer.Error: %s" (Db_writer.string_of_error error)
+   | `Exn (Db_writer.Error error, raw_backtrace) ->
+     OUnit2.logf ctx `Error "Db_writer.Error: %s\nBacktrace: %s" (Db_writer.string_of_error error) (Printexc.raw_backtrace_to_string raw_backtrace)
    | _ -> ()
   );
   unvaluefy ret
