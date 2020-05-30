@@ -96,6 +96,7 @@ expression_or_column:
 expression:
 | expr = IDENT { E_Identifier expr }
 | value = VALUE { E_Literal value }
+| LPAREN; expr = expression; RPAREN { expr }
 | func = IDENT; LPAREN; args = separated_list(COMMA, expression); RPAREN
   { E_FunCall (func, args) }
 (* 
