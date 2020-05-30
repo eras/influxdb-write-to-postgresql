@@ -144,9 +144,6 @@ struct
     | None -> db_fields meas
     | Some name -> [db_of_identifier name]
 
-  (* gives a string suitable for the VALUES expression of INSERT for the two insert cases: JSON and direct *)
-  let map_fst f = List.map (fun (k, v) -> (f k, v))
-
   let db_insert_values t (meas : Lexer.measurement) =
     let with_enumerate first els =
       let (result, next) =
@@ -169,7 +166,7 @@ struct
     in
     (* actual values are ignored, only the number of them matters *)
     List.concat [tags; db_names_of_fields t meas]
-    |> with_enumerate 1 |> fst |> map_fst (Printf.sprintf "$%d")
+    |> with_enumerate 1 |> fst |> Common.map_fst (Printf.sprintf "$%d")
     |> List.map fst
     |>
     match meas.time with

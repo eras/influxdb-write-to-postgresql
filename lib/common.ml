@@ -63,3 +63,10 @@ let db_of_identifier str =
   in
   loop ()
 
+(* gives a string suitable for the VALUES expression of INSERT for the two insert cases: JSON and direct *)
+let map_fst f = List.map (fun (k, v) -> (f k, v))
+let map_snd f = List.map (fun (k, v) -> (k, f v))
+
+(* Samy but work with any mapping (ie. any container or Seq) *)
+let map_fst' map f = map (fun (k, v) -> (f k, v))
+let map_snd' map f = map (fun (k, v) -> (k, f v))
