@@ -21,10 +21,10 @@ type create_index = {
 }
 
 type error =
-  | ParseError of (int * int)
+  | ParseError of ((int * int) * string)
 
 let string_of_error = function
-  | ParseError (p0, p1) -> Printf.sprintf "Parse error at %d-%d" p0 p1
+  | ParseError ((p0, p1), statement) -> Printf.sprintf "Parse error at %d-%d: %s" p0 p1 statement
 
 exception Error of error
 

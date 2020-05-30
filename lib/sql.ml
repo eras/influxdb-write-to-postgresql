@@ -11,4 +11,4 @@ let parse_sql str =
   with
   | Sql_parser.Error ->
     let at = Sedlexing.loc lexbuf.stream in
-    raise (Sql_types.Error (ParseError at))
+    raise (Sql_types.Error (ParseError (at, str)))
