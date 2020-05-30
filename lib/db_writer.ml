@@ -8,6 +8,7 @@ type config = {
   conninfo : string;
   time_field : string;
   tags_column: string option;   (* using tags column? then this is its name *)
+  fields_column: string option;   (* using fields column? then this is its name *)
 }
 
 type field_type =
@@ -162,8 +163,24 @@ struct
           )
         ) |> Yojson.Basic.to_string]
 
-  let db_insert_field_values (meas : Lexer.measurement) =
-    List.map (fun (_, field) -> db_raw_of_value field) meas.fields
+  let json_of_value : Lexer.value -> Yojson.t = function
+    | Lexer.String x -> `String x
+    | Lexer.Int x -> `Intlit (Int64.to_string x)
+    | Lexer.FloatNum x -> `Float x
+    | Lexer.Boolean x -> `Bool x
+
+  let db_insert_field_values t (meas : Lexer.measurement) =
+    match t.config.fields_column with
+    | None ->
+      meas.fields |> List.map (fun (_, field) -> db_raw_of_value field)
+    | Some _ ->
+      [`Assoc (
+          meas.fields |>
+          List.map (
+            fun (name, value) ->
+              (name, json_of_value value)
+          )
+        ) |> Yojson.to_string]
 
   let map_first f els =
     match els with
@@ -183,7 +200,7 @@ struct
   (* gives a string suitable for the VALUES expression of INSERT for the two insert cases: JSON and direct *)
   let map_fst f = List.map (fun (k, v) -> (f k, v))
 
-  let db_value_placeholders t (meas : Lexer.measurement) =
+  let db_insert_values t (meas : Lexer.measurement) =
     let with_enumerate first els =
       let (result, next) =
         (List.fold_left (
@@ -212,18 +229,29 @@ struct
     | None -> (fun xs -> "CURRENT_TIMESTAMP"::xs)
     | Some _ -> map_first (fun x -> Printf.sprintf "to_timestamp(%s)" x)
 
-  let insert_fields t meas =
+  let db_insert_fields t meas =
     let tags =
       match t.config.tags_column with
       | None -> db_tags meas
       | Some tags -> [db_of_identifier tags]
     in
-    let fields = db_fields meas in
-    List.concat [tags; fields]
+    let fields =
+      match t.config.fields_column with
+      | None -> db_fields meas
+      | Some fields -> [db_of_identifier fields]
+    in
+    List.concat [[t.quoted_time_field]; tags; fields]
 
-  let updates _t meas =
-    String.concat ", " (List.concat [db_fields meas] |> List.map @@ fun field ->
-                        field ^ "=" ^ "excluded." ^ field)
+  let db_update_set t meas =
+    match t.config.fields_column with
+    | None ->
+      String.concat ", " (List.concat [db_fields meas] |>
+                          List.map @@ fun field ->
+                          field ^ "=" ^ "excluded." ^ field)
+    | Some fields ->
+      db_of_identifier fields ^ "=" ^
+      db_of_identifier meas.measurement ^ "." ^ db_of_identifier fields ^ "||" ^
+      "excluded." ^ db_of_identifier fields
 
   let conflict_tags t (meas : Lexer.measurement) =
     match t.config.tags_column with
@@ -233,27 +261,24 @@ struct
   let insert_of_measurement t (meas : Lexer.measurement) =
     let query =
       "INSERT INTO " ^ db_of_identifier meas.measurement ^
-      "(" ^ String.concat ", " (t.quoted_time_field::insert_fields t meas) ^ ")" ^
-      "\nVALUES (" ^ String.concat ", " (db_value_placeholders t meas) ^ ")" ^
+      "(" ^ String.concat ", " (db_insert_fields t meas) ^ ")" ^
+      "\nVALUES (" ^ String.concat ", " (db_insert_values t meas) ^ ")" ^
       "\nON CONFLICT(" ^ String.concat ", " (t.quoted_time_field::conflict_tags t meas) ^ ")" ^
-      "\nDO UPDATE SET " ^ updates t meas
+      "\nDO UPDATE SET " ^ db_update_set t meas
     in
-    let params = db_insert_tag_values t meas @ db_insert_field_values meas in
-    let params =
-      let time =
-        match meas.time with
-        | None -> []
-        | Some x ->
-          [Printf.sprintf "%s" (
-              (* TODO: what about negative values? Check that 'rem' works as expected *)
-              if t.subsecond_time_field
-              then Printf.sprintf "%Ld.%09Ld" (Int64.div x 1000000000L) (Int64.rem x 1000000000L)
-              else Printf.sprintf "%Ld" (Int64.div x 1000000000L)
-            )]
-      in
-      time @ params
+    let params = db_insert_tag_values t meas @ db_insert_field_values t meas in
+    let time =
+      match meas.time with
+      | None -> []
+      | Some x ->
+        [Printf.sprintf "%s" (
+            (* TODO: what about negative values? Check that 'rem' works as expected *)
+            if t.subsecond_time_field
+            then Printf.sprintf "%Ld.%09Ld" (Int64.div x 1000000000L) (Int64.rem x 1000000000L)
+            else Printf.sprintf "%Ld" (Int64.div x 1000000000L)
+          )]
     in
-    (query, params |> Array.of_list)
+    (query, time @ params |> Array.of_list)
 
   let query_column_info (db: Pg.connection) =
     let result = db#exec ~expect:[Pg.Tuples_ok] "SELECT table_name, column_name, data_type FROM INFORMATION_SCHEMA.COLUMNS" in

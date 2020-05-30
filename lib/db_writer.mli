@@ -14,6 +14,7 @@ type config = {
   conninfo : string;
   time_field : string;
   tags_column: string option;   (* using tags column? then this is its name *)
+  fields_column: string option;   (* using fields column? then this is its name *)
 }
 
 (** [string_of_error error] converts the error to a string *)

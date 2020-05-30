@@ -165,7 +165,8 @@ let with_new_db ctx schema f =
 let make_db_writer_config conninfo =
   { Db_writer.conninfo = Lazy.force conninfo;
     time_field = "time";
-    tags_column = None; }
+    tags_column = None;
+    fields_column = None; }
 
 let with_db_writer ?(make_config=make_db_writer_config) (ctx : OUnit2.test_ctxt) ~schema (f : Db_writer.t Lazy.t db_test_context -> 'a) : 'a =
   with_new_db ctx schema @@ fun { conninfo; _ } ->
