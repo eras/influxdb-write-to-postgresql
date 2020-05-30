@@ -17,7 +17,7 @@ let handle_request body db =
         with
         | Lexer.Error error ->
           `Error ("lexer error: " ^ Lexer.string_of_error error)
-        | Db_writer.Error (Db_writer.PgError (Postgresql.Connection_failure message)) ->
+        | Db_writer.Error (Db_writer.PgError (Postgresql.Connection_failure message, None)) ->
           if retries > 0 then (
             Db_writer.reconnect db;
             try_write (retries - 1)

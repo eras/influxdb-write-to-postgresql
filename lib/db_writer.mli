@@ -3,8 +3,9 @@ module Pg = Postgresql
 type quote_mode = QuoteAlways
 
 type t
+type query = string
 type error =
-  | PgError of Pg.error
+  | PgError of (Pg.error * query option)
   | MalformedUTF8
   | CannotAddTags of string list
 

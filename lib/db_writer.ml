@@ -54,8 +54,10 @@ type t = {
 
 let create_column_info () = Hashtbl.create 10
 
+type query = string
+
 type error =
-  | PgError of Pg.error
+  | PgError of (Pg.error * query option)
   | MalformedUTF8
   | CannotAddTags of string list
 
@@ -307,7 +309,7 @@ let create (config : config) =
       known_columns;
       config }
   with Pg.Error error ->
-    raise (Error (PgError error))
+    raise (Error (PgError (error, None)))
 
 let close t =
   t.db#finish
@@ -319,7 +321,8 @@ let reconnect t =
 
 let string_of_error error =
   match error with
-  | PgError error -> Pg.string_of_error error
+  | PgError (error, None) -> Pg.string_of_error error
+  | PgError (error, Some query) -> Pg.string_of_error error ^ " for " ^ query
   | MalformedUTF8 -> "Malformed UTF8"
   | CannotAddTags tags -> "Cannot add tags " ^ String.concat ", " (List.map db_of_identifier tags)
 
@@ -365,10 +368,15 @@ let write t (measurements: Lexer.measurement list) =
         let tag_types = List.map (fun (name, _) -> (name, FT_String)) measurement.tags in
         let () = check_and_update_columns ~kind:`Tags t measurement.measurement tag_types in
         let () = check_and_update_columns ~kind:`Fields t measurement.measurement field_types in
-        ignore (t.db#exec ~params ~expect:[Pg.Command_ok] query);
+        try
+          ignore (t.db#exec ~params ~expect:[Pg.Command_ok] query);
+        with Pg.Error error ->
+          (try ignore (t.db#exec ~expect:[Pg.Command_ok] "ROLLBACK");
+           with Pg.Error _ -> (* ignore *) ());
+          raise (Error (PgError (error, Some query)))
     ) measurements;
     ignore (t.db#exec ~expect:[Pg.Command_ok] "COMMIT");
   with Pg.Error error ->
     (try ignore (t.db#exec ~expect:[Pg.Command_ok] "ROLLBACK");
      with Pg.Error _ -> (* ignore *) ());
-    raise (Error (PgError error))
+    raise (Error (PgError (error, None)))
