@@ -26,7 +26,7 @@ type error = Invalid_database_name of string
 exception Error of error
 
 let validate_char ch =
-  if not (Db_writer.is_unquoted_ascii (Uchar.of_char ch)) then
+  if not (Common.is_unquoted_ascii (Uchar.of_char ch)) then
     raise (Error (Invalid_database_name ""))
 
 let validate_name name =
