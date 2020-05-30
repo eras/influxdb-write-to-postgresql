@@ -8,6 +8,7 @@ let string_of_token = function
   | CONCURRENTLY -> "CONCURRENTLY"
   | CREATE -> "CREATE"
   | DESC -> "DESC"
+  | DOT -> "."
   | EXISTS -> "EXISTS"
   | FIRST -> "FIRST"
   | IDENT string -> string
@@ -42,7 +43,7 @@ type error =
 exception Error of error
 
 let ident_first = [%sedlex.regexp? 'a'..'z' | 'A'..'Z' | '_' ]
-let ident_rest = [%sedlex.regexp? ident_first | '0'..'9' | '.' ]
+let ident_rest = [%sedlex.regexp? ident_first | '0'..'9' ]
 
 let integer_first = [%sedlex.regexp? '0'..'9' ]
 let integer_rest = [%sedlex.regexp? '0'..'9' ]
@@ -76,6 +77,7 @@ let rec lex buf =
   | ">" -> RELOP_GT
   | "=" -> EQUAL
   | ' ' | '\t' -> lex buf
+  | '.' -> DOT
   | integer_first, Star integer_rest -> VALUE (Sql_types.V_Integer (Int64.of_string (Sedlexing.Utf8.lexeme buf)))
   | ident_first, Star ident_rest -> IDENT (Sedlexing.Utf8.lexeme buf)
   | '"' ->

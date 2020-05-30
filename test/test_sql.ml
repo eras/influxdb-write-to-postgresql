@@ -13,7 +13,9 @@ let testLexCreateUniqueIndex _ctx =
   assert_equal ~printer INDEX (lex ());
   assert_equal ~printer (IDENT "meas_time_idx") (lex ());
   assert_equal ~printer ON (lex ());
-  assert_equal ~printer (IDENT "public.meas") (lex ());
+  assert_equal ~printer (IDENT "public") (lex ());
+  assert_equal ~printer DOT (lex ());
+  assert_equal ~printer (IDENT "meas") (lex ());
   assert_equal ~printer USING (lex ());
   assert_equal ~printer (IDENT "btree") (lex ());
   assert_equal ~printer LPAREN (lex ());

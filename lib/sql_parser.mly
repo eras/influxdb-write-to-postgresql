@@ -8,6 +8,7 @@
 %token CONCURRENTLY
 %token CREATE
 %token DESC
+%token DOT
 %token END
 %token EXISTS
 %token FIRST
@@ -44,7 +45,7 @@ statement:
   boption(if_not_exists);
   boption(CONCURRENTLY);
   index = IDENT;
-  ON; boption(ONLY); table = IDENT;
+  ON; boption(ONLY); table = qual_ident;
   using = option(using); LPAREN; exprs = expressions_or_columns; RPAREN;
   option(include_);
   option(with_);
@@ -63,7 +64,7 @@ statement:
   }
 
 include_:
-| INCLUDE; ids = separated_nonempty_list(COMMA, IDENT) { ids }
+| INCLUDE; ids = separated_nonempty_list(COMMA, qual_ident) { ids }
 
 with_:
 | WITH; ids = separated_nonempty_list(COMMA, with_setting) { ids }
@@ -104,6 +105,10 @@ Warning: 6 shift/reduce conflicts were arbitrarily resolved.
 *)
 | a = expression; op = binop; b = expression;
   { E_FunCall (op, [a; b]) }
+
+qual_ident:
+| ident = IDENT { ident }
+| schema = IDENT; DOT; ident = IDENT { schema ^ "." ^ ident }
 
 binop:
 | RELOP_LT { "<" }
