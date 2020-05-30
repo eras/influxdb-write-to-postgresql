@@ -33,6 +33,7 @@
 %token RELOP_GTE
 %token EQUAL
 %token RELOP_NE
+%token <string> BINOP
 %token <Sql_types.value> VALUE
 %token <string> IDENT
 

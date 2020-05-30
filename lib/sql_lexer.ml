@@ -34,6 +34,7 @@ let string_of_token = function
   | RELOP_GTE -> ">="
   | EQUAL -> "="
   | RELOP_NE -> "<>"
+  | BINOP str -> str
   | END -> ";"
 
 type error =
@@ -47,6 +48,8 @@ let ident_rest = [%sedlex.regexp? ident_first | '0'..'9' ]
 
 let integer_first = [%sedlex.regexp? '0'..'9' ]
 let integer_rest = [%sedlex.regexp? '0'..'9' ]
+
+let binop = [%sedlex.regexp? Plus('+' | '-' | '*' | '/' | '<' | '>' | '=' | '~' | '!' | '@' | '#' | '%' | '^' | '&' | '|' | '`' | '?') ]
 
 let rec lex buf =
   match%sedlex buf with
@@ -76,6 +79,7 @@ let rec lex buf =
   | "<" -> RELOP_LT
   | ">" -> RELOP_GT
   | "=" -> EQUAL
+  | binop -> BINOP (Sedlexing.Utf8.lexeme buf)
   | ' ' | '\t' -> lex buf
   | '.' -> DOT
   | integer_first, Star integer_rest -> VALUE (Sql_types.V_Integer (Int64.of_string (Sedlexing.Utf8.lexeme buf)))
