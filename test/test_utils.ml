@@ -133,7 +133,7 @@ let retry f =
 
 let create_new_database =
   let db_id_counter = ref 0 in
-  fun conninfo ->
+  fun schema conninfo ->
     let name = Printf.sprintf "test_db_%03d" !db_id_counter in
     let _ = incr db_id_counter in
     let pg = retry @@ fun () ->
@@ -145,10 +145,7 @@ CREATE DATABASE %s
     pg#finish;
     let conninfo_with_dbname = (conninfo ^ " dbname=" ^ name) in
     let pg = new Postgresql.connection ~conninfo:conninfo_with_dbname () in
-    ignore (pg#exec ~expect:[Postgresql.Command_ok] {|
-CREATE TABLE meas(time timestamptz NOT NULL);
-CREATE UNIQUE INDEX meas_time_dx ON meas(time);
-|});
+    ignore (pg#exec ~expect:[Postgresql.Command_ok] schema);
     pg#finish;
     conninfo_with_dbname
 
@@ -160,9 +157,9 @@ let with_conninfo _ctx f =
   with Postgresql.Error error ->
     Printf.ksprintf OUnit2.assert_failure "Postgresql.Error: %s" (Postgresql.string_of_error error)
 
-let with_new_db ctx f =
+let with_new_db ctx schema f =
   with_conninfo ctx @@ fun { conninfo; db = () } ->
-  let conninfo = lazy (create_new_database (Lazy.force conninfo)) in
+  let conninfo = lazy (create_new_database schema (Lazy.force conninfo)) in
   f { db = (); conninfo; }
 
 let with_db_writer (ctx : OUnit2.test_ctxt) (f : Db_writer.t Lazy.t db_test_context -> 'a) : 'a =

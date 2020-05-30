@@ -3,7 +3,11 @@ open OUnit2
 open Influxdb_write_to_postgresql
 
 let testCreate ctx =
-  Test_utils.with_db_writer ctx @@ fun _ -> ()
+  let schema = {|
+CREATE TABLE meas(time timestamptz NOT NULL);
+CREATE UNIQUE INDEX meas_time_idx ON meas(time);
+|} in
+  Test_utils.with_db_writer ctx ~schema @@ fun _ -> ()
 
 let identity x = x
 
@@ -14,7 +18,11 @@ let testDbOfIdentifier _ctx =
   assert_equal ~printer:identity {|U&"tidii\2603"|} (Db_writer.Internal.db_of_identifier "tidii☃")
 
 let testInsert ctx =
-  Test_utils.with_db_writer ctx @@ fun { db; _ } ->
+  let schema = {|
+CREATE TABLE meas(time timestamptz NOT NULL);
+CREATE UNIQUE INDEX meas_time_idx ON meas(time);
+|} in
+  Test_utils.with_db_writer ctx ~schema @@ fun { db; _ } ->
   let db = Lazy.force db in
   let meas =
     Lexer.make_measurement
@@ -28,7 +36,11 @@ let testInsert ctx =
   assert_equal (snd query) [|"1590329952"; "1"; "2"|]
 
 let testInsertNoTime ctx =
-  Test_utils.with_db_writer ctx @@ fun { db; _ } ->
+  let schema = {|
+CREATE TABLE meas(time timestamptz NOT NULL, moi1 TEXT NOT NULL DEFAULT(''), moi2 TEXT NOT NULL DEFAULT(''));
+CREATE UNIQUE INDEX meas_time_idx ON meas(time, moi1, moi2);
+|} in
+  Test_utils.with_db_writer ctx ~schema @@ fun { db; _ } ->
   let db = Lazy.force db in
   let meas =
     Lexer.make_measurement
@@ -42,7 +54,11 @@ let testInsertNoTime ctx =
   assert_equal (snd query) [|"1"; "2"|]
 
 let testWrite ctx =
-  Test_utils.with_db_writer ctx @@ fun { db; conninfo } ->
+  let schema = {|
+CREATE TABLE meas(time timestamptz NOT NULL, moi1 TEXT NOT NULL DEFAULT(''), moi2 TEXT NOT NULL DEFAULT(''));
+CREATE UNIQUE INDEX meas_time_idx ON meas(time, moi1, moi2);
+|} in
+  Test_utils.with_db_writer ctx ~schema @@ fun { db; conninfo } ->
   let db = Lazy.force db in
   let meas =
     Lexer.make_measurement
@@ -68,7 +84,11 @@ let testWrite ctx =
      Printf.fprintf stderr "Db_writer error: %s\n%!" (Db_writer.string_of_error error))
 
 let testWriteNoTime ctx =
-  Test_utils.with_db_writer ctx @@ fun { db; conninfo } ->
+  let schema = {|
+CREATE TABLE meas(time timestamptz NOT NULL, moi1 text NOT NULL DEFAULT(''), moi2 text NOT NULL DEFAULT(''));
+CREATE UNIQUE INDEX meas_time_idx ON meas(time, moi1, moi2);
+|} in
+  Test_utils.with_db_writer ctx ~schema @@ fun { db; conninfo } ->
   let db = Lazy.force db in
   let meas =
     Lexer.make_measurement
