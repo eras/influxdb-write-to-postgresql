@@ -6,6 +6,7 @@ RUN opam install dune lwt lwt_ppx postgresql cohttp-lwt-unix sedlex postgresql
 RUN opam install ounit2
 RUN opam install uutf
 RUN opam install yojson
+RUN opam install -y menhir
 
 COPY dune-project influxdb_write_to_postgresql.* /work/
 COPY bin /work/bin/
