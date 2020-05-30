@@ -40,3 +40,13 @@ let string_of_value = function
 
 type statement =
   | CreateIndex of create_index
+
+let rec string_of_expression ?(db_of_identifier=Common.db_of_identifier) =
+  let (!) x = "(" ^ x ^ ")" in
+  function
+  | E_Literal value -> string_of_value value
+  | E_Identifier string -> db_of_identifier string
+  | E_FunCall (func, expressions) ->
+    db_of_identifier func ^ "(" ^ String.concat ", " (List.map string_of_expression expressions) ^ ")"
+  | E_RelOp (a, relop, b) ->
+    !(string_of_expression a) ^ " " ^ relop ^ " " ^ !(string_of_expression b)
