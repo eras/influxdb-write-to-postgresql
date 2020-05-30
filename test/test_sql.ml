@@ -100,7 +100,7 @@ let testParseCreateUniqueIndexWhere _ctx =
         table     = "public.meas";
         algorithm = Some "btree";
         fields    = [`Column "time"; `Column "moi1"];
-        where     = Some (Sql_types.(E_FunCall ("<", [E_Identifier "moi1"; E_Literal (V_Integer 500L)])))
+        where     = Some (Sql_types.(E_RelOp (E_Identifier "moi1", "<", E_Literal (V_Integer 500L))))
       })
     parsed
 

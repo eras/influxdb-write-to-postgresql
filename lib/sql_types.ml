@@ -6,6 +6,7 @@ type expression =
   | E_Literal of value
   | E_Identifier of string
   | E_FunCall of string * expression list
+  | E_RelOp of expression * string * expression
 
 type index_field =
   [`Column of string

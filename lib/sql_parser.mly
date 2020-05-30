@@ -105,7 +105,7 @@ Warning: one state has shift/reduce conflicts.
 Warning: 6 shift/reduce conflicts were arbitrarily resolved.
 *)
 | a = expression; op = binop; b = expression;
-  { E_FunCall (op, [a; b]) }
+  { E_RelOp (a, op, b) }
 
 qual_ident:
 | ident = IDENT { ident }
