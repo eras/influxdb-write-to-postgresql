@@ -81,7 +81,7 @@ CREATE UNIQUE INDEX meas_time_idx ON meas(time, moi1, moi2);
        assert_failure "Unexpected results"
    with
    | Db_writer.Error error ->
-     Printf.fprintf stderr "Db_writer error: %s\n%!" (Db_writer.string_of_error error))
+     Printf.ksprintf assert_failure "Db_writer error: %s" (Db_writer.string_of_error error))
 
 let testWriteNoTime ctx =
   let schema = {|
@@ -112,7 +112,7 @@ CREATE UNIQUE INDEX meas_time_idx ON meas(time, moi1, moi2);
        assert_failure "Unexpected results"
    with
    | Db_writer.Error error ->
-     Printf.fprintf stderr "Db_writer error: %s\n%!" (Db_writer.string_of_error error))
+     Printf.ksprintf assert_failure "Db_writer error: %s" (Db_writer.string_of_error error))
 
 let suite = "Db_writer" >::: [
   "testCreate" >:: testCreate;
