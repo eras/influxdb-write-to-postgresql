@@ -20,7 +20,7 @@ RUN sudo chown -R opam /work
 
 RUN whoami
 RUN ls -la /work
-RUN eval $(opam env) && dune build
+RUN eval $(opam env) && dune build --profile release
 
 #FROM alpine:latest
 #RUN apk --no-cache add libpq ca-certificates
