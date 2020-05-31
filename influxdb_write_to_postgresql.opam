@@ -6,7 +6,7 @@ homepage: "https://github.com/eras/influxdb-write-to-postgresql"
 bug-reports: "https://github.com/eras/influxdb-write-to-postgresql/issues"
 dev-repo: "git+https://github.com/eras/influxdb-write-to-postgresql.git"
 license: "Apache-2.0"
-depends: ["dune" "postgresql" "cohttp" "lwt_ppx" "lwt" "sedlex" "ounit2" "uutf" "yojson"]
+depends: ["dune" "postgresql" "cohttp" "lwt_ppx" "lwt" "sedlex" "ounit2" "uutf" "yojson" "containers"]
 build: [
   ["dune" "build" "-p" name "-j" jobs]
 ]

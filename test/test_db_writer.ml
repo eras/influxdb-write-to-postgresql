@@ -19,8 +19,10 @@ let testDbOfIdentifier _ctx =
 
 let testInsert ctx =
   let schema = {|
-CREATE TABLE meas(time timestamptz NOT NULL);
-CREATE UNIQUE INDEX meas_time_idx ON meas(time);
+CREATE TABLE meas(time timestamptz NOT NULL,
+                  moi1 text NOT NULL DEFAULT(''),
+                  moi2 text NOT NULL DEFAULT(''));
+CREATE UNIQUE INDEX meas_time_idx ON meas(time, moi1, moi2);
 |} in
   Test_utils.with_db_writer ctx ~schema @@ fun { db; _ } ->
   let db = Lazy.force db in
@@ -147,6 +149,60 @@ CREATE UNIQUE INDEX meas_time_idx ON meas(time, moi1, moi2);
    with
    | Db_writer.Error error ->
      Printf.ksprintf assert_failure "Db_writer error: %s" (Db_writer.string_of_error error))
+
+let testWriteMulti ctx =
+  let schema = {|
+CREATE TABLE meas(time timestamptz NOT NULL, moi1 TEXT NOT NULL DEFAULT(''), moi2 TEXT NOT NULL DEFAULT(''));
+CREATE UNIQUE INDEX meas_time_idx ON meas(time, moi1, moi2);
+|} in
+  Test_utils.with_db_writer ctx ~schema @@ fun { db; conninfo } ->
+  let db = Lazy.force db in
+  let test_sequence label input all_reference_content =
+    (try
+       ignore (Db_writer.write db input);
+       let direct = new Postgresql.connection ~conninfo:(Lazy.force conninfo) () in
+       let result = direct#exec ~expect:[Postgresql.Tuples_ok] "SELECT extract(epoch from time), moi1, moi2, value FROM meas" in
+       assert_equal ~printer:string_of_int (List.length all_reference_content) (List.length result#get_all_lst);
+       List.combine (List.sort compare result#get_all_lst) (List.sort compare all_reference_content) |> List.iter @@ function
+       | ([time; moi1; moi2; value], (time', moi1', moi2', value')) ->
+         let time = float_of_string time in
+         assert_equal ~printer:string_of_float time' time;
+         assert_equal ~printer:identity moi1' moi1;
+         assert_equal ~printer:identity moi2' moi2;
+         assert_equal ~printer:identity value' value
+       | _ ->
+         assert_failure "Unexpected columns"
+     with
+     | Db_writer.Error error ->
+       Printf.ksprintf assert_failure "Db_writer error in sequence %s: %s" label (Db_writer.string_of_error error))
+  in
+  test_sequence "1"
+    [Lexer.make_measurement
+       ~measurement:"meas"
+       ~tags:[("moi1", "1");("moi2", "2")]
+       ~fields:[("value", Lexer.Int 42L)]
+       ~time:(Some 1590329952000000000L);
+     Lexer.make_measurement
+       ~measurement:"meas"
+       ~tags:[("moi1", "1");("moi2", "2")]
+       ~fields:[("value", Lexer.Int 42L)]
+       ~time:(Some 1590329952000000000L)]
+    [(1590329952.0, "1", "2", "42")];
+  test_sequence "2"
+    [Lexer.make_measurement
+       ~measurement:"meas"
+       ~tags:[("moi1", "1")]
+       ~fields:[("value", Lexer.Int 43L)]
+       ~time:(Some 1590329952000000000L);
+     Lexer.make_measurement
+       ~measurement:"meas"
+       ~tags:[("moi2", "2")]
+       ~fields:[("value", Lexer.Int 44L)]
+       ~time:(Some 1590329952000000000L)]
+    [(1590329952.0, "1", "2", "42");
+     (1590329952.0, "1", "", "44");
+     (1590329952.0, "", "2", "43");
+    ]
 
 let testWriteNoTime ctx =
   let schema = {|

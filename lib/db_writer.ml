@@ -3,6 +3,7 @@ module Pg = Postgresql
 type quote_mode = QuoteAlways
 
 module FieldMap = Map.Make(struct type t = string let compare = compare end)
+module TableMap = Map.Make(struct type t = string let compare = compare end)
 
 type config = {
   conninfo : string;
@@ -50,6 +51,7 @@ type t = {
   subsecond_time_field: bool;
   config: config;
   mutable known_columns: column_info;
+  indices: string list list TableMap.t;
 }
 
 let create_column_info () = Hashtbl.create 10
@@ -60,6 +62,7 @@ type error =
   | PgError of (Pg.error * query option)
   | MalformedUTF8
   | CannotAddTags of string list
+  | NoPrimaryIndexFound of string
 
 exception Error of error
 
@@ -198,16 +201,16 @@ struct
       "excluded." ^ db_of_identifier fields
 
   let conflict_tags t (meas : Lexer.measurement) =
-    match t.config.tags_column with
-    | None -> meas.tags |> List.map @@ fun (tag, _) -> db_of_identifier tag
-    | Some tags -> [db_of_identifier tags]
+    match TableMap.find_opt meas.measurement t.indices with
+    | None | Some [] -> raise (Error (NoPrimaryIndexFound meas.measurement))
+    | Some (index::_rest) -> index
 
   let insert_of_measurement t (meas : Lexer.measurement) =
     let query =
       "INSERT INTO " ^ db_of_identifier meas.measurement ^
       "(" ^ String.concat ", " (db_insert_fields t meas) ^ ")" ^
       "\nVALUES (" ^ String.concat ", " (db_insert_values t meas) ^ ")" ^
-      "\nON CONFLICT(" ^ String.concat ", " (t.quoted_time_field::conflict_tags t meas) ^ ")" ^
+      "\nON CONFLICT(" ^ String.concat ", " (conflict_tags t meas) ^ ")" ^
       "\nDO UPDATE SET " ^ db_update_set t meas
     in
     let params = db_insert_tag_values t meas @ db_insert_field_values t meas in
@@ -236,6 +239,34 @@ struct
     | _ -> assert false
     in
     column_info
+
+  let primary_keys_of_index = function
+    | Sql.CreateIndex {
+        unique = true;
+        fields;
+        _;
+      } ->
+      Some (fields |> List.map (function
+          | `Column field -> field
+          | `Expression expression -> Sql.string_of_expression ~db_of_identifier expression
+        ))
+    | Sql.CreateIndex {
+        unique = false;
+        _;
+      } -> None
+
+  let query_indices (db : Pg.connection) =
+    let result = db#exec ~expect:[Pg.Tuples_ok] {|SELECT tablename, indexdef FROM pg_indexes WHERE schemaname='public' order by tablename|} in
+    result#get_all_lst |> List.map (function
+        | [table_name; index_definition] -> (table_name, Sql.parse_sql index_definition)
+        | _ -> assert false)
+    |> Common.map_snd primary_keys_of_index
+    |> CCList.group_succ ~eq:( = )
+    |> List.map (fun xs ->
+        let tablename = fst (List.hd xs) in
+        (tablename, List.filter_map snd xs)
+      )
+    |> List.to_seq
 end
 
 open Internal
@@ -247,8 +278,9 @@ let create (config : config) =
     let quoted_time_field = db_of_identifier (config.time_field) in
     let subsecond_time_field = false in
     let known_columns = query_column_info db in
+    let indices = query_indices db |> TableMap.of_seq in
     { db; quote_mode; quoted_time_field; subsecond_time_field;
-      known_columns;
+      known_columns; indices;
       config }
   with Pg.Error error ->
     raise (Error (PgError (error, None)))
@@ -267,6 +299,7 @@ let string_of_error error =
   | PgError (error, Some query) -> Pg.string_of_error error ^ " for " ^ query
   | MalformedUTF8 -> "Malformed UTF8"
   | CannotAddTags tags -> "Cannot add tags " ^ String.concat ", " (List.map db_of_identifier tags)
+  | NoPrimaryIndexFound table -> "No primary index found for table " ^ table
 
 let _ = Printexc.register_printer (function
     | Error error -> Some (string_of_error error)

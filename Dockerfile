@@ -7,6 +7,7 @@ RUN opam install ounit2
 RUN opam install uutf
 RUN opam install yojson
 RUN opam install -y menhir
+RUN opam install containers
 
 COPY dune-project influxdb_write_to_postgresql.* /work/
 COPY bin /work/bin/

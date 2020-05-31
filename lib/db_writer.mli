@@ -8,6 +8,7 @@ type error =
   | PgError of (Pg.error * query option)
   | MalformedUTF8
   | CannotAddTags of string list
+  | NoPrimaryIndexFound of string
 
 exception Error of error
 
