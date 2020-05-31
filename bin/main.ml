@@ -9,28 +9,28 @@ let conninfo_env_name = "IWTP_CONNINFO"
 
 let handle_request body db =
   body |> Cohttp_lwt.Body.to_string >|= fun body ->
-      let rec try_write retries =
-        try
-          let measurements = Lexer.lines (Sedlexing.Utf8.from_string body) in
-          Db_writer.write db measurements;
-          `Ok measurements
-        with
-        | Lexer.Error error ->
-          `Error ("lexer error: " ^ Lexer.string_of_error error)
-        | Db_writer.Error (Db_writer.PgError (Postgresql.Connection_failure message, None)) ->
-          if retries > 0 then (
-            Db_writer.reconnect db;
-            try_write (retries - 1)
-          )
-          else
-            `Error ("db connection error: " ^ message)
-        | Db_writer.Error error ->
-          `Error ("db error: " ^ Db_writer.string_of_error error)
-      in
-      let results = try_write 3 in
-      match results with
-       | `Ok _results -> "OK"
-       | `Error error -> error
+  let rec try_write retries =
+    try
+      let measurements = Lexer.lines (Sedlexing.Utf8.from_string body) in
+      Db_writer.write db measurements;
+      `Ok measurements
+    with
+    | Lexer.Error error ->
+      `Error ("lexer error: " ^ Lexer.string_of_error error)
+    | Db_writer.Error (Db_writer.PgError (Postgresql.Connection_failure message, None)) ->
+      if retries > 0 then (
+        Db_writer.reconnect db;
+        try_write (retries - 1)
+      )
+      else
+        `Error ("db connection error: " ^ message)
+    | Db_writer.Error error ->
+      `Error ("db error: " ^ Db_writer.string_of_error error)
+  in
+  let results = try_write 3 in
+  match results with
+  | `Ok _results -> "OK"
+  | `Error error -> error
 
 let server =
   let conninfo =
