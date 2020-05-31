@@ -68,8 +68,8 @@ let testInsertJsonTags ctx =
 CREATE TABLE meas(time timestamptz NOT NULL, tags jsonb NOT NULL);
 CREATE UNIQUE INDEX meas_time_idx ON meas(time, tags);
 |} in
-  let make_config conninfo =
-    { Db_writer.conninfo = Lazy.force conninfo;
+  let make_config db_spec =
+    { Db_writer.db_spec = Lazy.force db_spec;
       time_field = "time";
       tags_column = Some "tags";
       fields_column = None; }
@@ -96,8 +96,8 @@ let testInsertJsonFields ctx =
 CREATE TABLE meas(time timestamptz NOT NULL, moi1 TEXT NOT NULL DEFAULT(''), moi2 TEXT NOT NULL DEFAULT(''), fields JSONB NOT NULL);
 CREATE UNIQUE INDEX meas_time_idx ON meas(time, moi1, moi2);
 |} in
-  let make_config conninfo =
-    { Db_writer.conninfo = Lazy.force conninfo;
+  let make_config db_spec =
+    { Db_writer.db_spec = Lazy.force db_spec;
       time_field = "time";
       tags_column = None;
       fields_column = Some "fields"; }
@@ -124,7 +124,7 @@ let testWrite ctx =
 CREATE TABLE meas(time timestamptz NOT NULL, moi1 TEXT NOT NULL DEFAULT(''), moi2 TEXT NOT NULL DEFAULT(''));
 CREATE UNIQUE INDEX meas_time_idx ON meas(time, moi1, moi2);
 |} in
-  Test_utils.with_db_writer ctx ~schema @@ fun { db; conninfo } ->
+  Test_utils.with_db_writer ctx ~schema @@ fun { db; db_spec } ->
   let db = Lazy.force db in
   let meas =
     Lexer.make_measurement
@@ -135,7 +135,7 @@ CREATE UNIQUE INDEX meas_time_idx ON meas(time, moi1, moi2);
   in
   (try
      ignore (Db_writer.write db [meas]);
-     let direct = new Postgresql.connection ~conninfo:(Lazy.force conninfo) () in
+     let direct = Db_writer.Internal.new_pg_connection (Lazy.force db_spec) in
      let result = direct#exec ~expect:[Postgresql.Tuples_ok] "SELECT extract(epoch from time), moi1, moi2, value FROM meas" in
      match result#get_all_lst with
      | [[time; moi1; moi2; value]] ->
@@ -155,12 +155,12 @@ let testWriteMulti ctx =
 CREATE TABLE meas(time timestamptz NOT NULL, moi1 TEXT NOT NULL DEFAULT(''), moi2 TEXT NOT NULL DEFAULT(''));
 CREATE UNIQUE INDEX meas_time_idx ON meas(time, moi1, moi2);
 |} in
-  Test_utils.with_db_writer ctx ~schema @@ fun { db; conninfo } ->
+  Test_utils.with_db_writer ctx ~schema @@ fun { db; db_spec } ->
   let db = Lazy.force db in
   let test_sequence label input all_reference_content =
     (try
        ignore (Db_writer.write db input);
-       let direct = new Postgresql.connection ~conninfo:(Lazy.force conninfo) () in
+       let direct = Db_writer.Internal.new_pg_connection (Lazy.force db_spec) in
        let result = direct#exec ~expect:[Postgresql.Tuples_ok] "SELECT extract(epoch from time), moi1, moi2, value FROM meas" in
        assert_equal ~printer:string_of_int (List.length all_reference_content) (List.length result#get_all_lst);
        List.combine (List.sort compare result#get_all_lst) (List.sort compare all_reference_content) |> List.iter @@ function
@@ -209,7 +209,7 @@ let testWriteNoTime ctx =
 CREATE TABLE meas(time timestamptz NOT NULL, moi1 text NOT NULL DEFAULT(''), moi2 text NOT NULL DEFAULT(''));
 CREATE UNIQUE INDEX meas_time_idx ON meas(time, moi1, moi2);
 |} in
-  Test_utils.with_db_writer ctx ~schema @@ fun { db; conninfo } ->
+  Test_utils.with_db_writer ctx ~schema @@ fun { db; db_spec } ->
   let db = Lazy.force db in
   let meas =
     Lexer.make_measurement
@@ -220,7 +220,7 @@ CREATE UNIQUE INDEX meas_time_idx ON meas(time, moi1, moi2);
   in
   (try
      ignore (Db_writer.write db [meas]);
-     let direct = new Postgresql.connection ~conninfo:(Lazy.force conninfo) () in
+     let direct = Db_writer.Internal.new_pg_connection (Lazy.force db_spec) in
      let result = direct#exec ~expect:[Postgresql.Tuples_ok] "SELECT extract(epoch from now() - time), moi1, moi2, value FROM meas" in
      match result#get_all_lst with
      | [[delta; moi1; moi2; value]] ->
@@ -241,13 +241,13 @@ let testWriteJsonTags ctx =
 CREATE TABLE meas(time timestamptz NOT NULL, tags jsonb NOT NULL);
 CREATE UNIQUE INDEX meas_time_idx ON meas(time, tags);
 |} in
-  let make_config conninfo =
-    { Db_writer.conninfo = Lazy.force conninfo;
+  let make_config db_spec =
+    { Db_writer.db_spec = Lazy.force db_spec;
       time_field = "time";
       tags_column = Some "tags";
       fields_column = None; }
   in
-  Test_utils.with_db_writer ~make_config ctx ~schema @@ fun { db; conninfo } ->
+  Test_utils.with_db_writer ~make_config ctx ~schema @@ fun { db; db_spec } ->
   let db = Lazy.force db in
   let meas =
     Lexer.make_measurement
@@ -258,7 +258,7 @@ CREATE UNIQUE INDEX meas_time_idx ON meas(time, tags);
   in
   (try
      ignore (Db_writer.write db [meas]);
-     let direct = new Postgresql.connection ~conninfo:(Lazy.force conninfo) () in
+     let direct = Db_writer.Internal.new_pg_connection (Lazy.force db_spec) in
      let result = direct#exec ~expect:[Postgresql.Tuples_ok] "SELECT extract(epoch from time), tags->>'moi1', tags->>'moi2', value FROM meas" in
      match result#get_all_lst with
      | [[time; moi1; moi2; value]] ->
@@ -278,13 +278,13 @@ let testWriteWriteJsonFields ctx =
 CREATE TABLE meas(time timestamptz NOT NULL, moi1 TEXT NOT NULL DEFAULT(''), moi2 TEXT NOT NULL DEFAULT(''), fields jsonb NOT NULL);
 CREATE UNIQUE INDEX meas_time_idx ON meas(time, moi1, moi2);
 |} in
-  let make_config conninfo =
-    { Db_writer.conninfo = Lazy.force conninfo;
+  let make_config db_spec =
+    { Db_writer.db_spec = Lazy.force db_spec;
       time_field = "time";
       tags_column = None;
       fields_column = Some "fields"; }
   in
-  Test_utils.with_db_writer ~make_config ctx ~schema @@ fun { db; conninfo } ->
+  Test_utils.with_db_writer ~make_config ctx ~schema @@ fun { db; db_spec } ->
   let db = Lazy.force db in
   let meas =
     Lexer.make_measurement
@@ -295,7 +295,7 @@ CREATE UNIQUE INDEX meas_time_idx ON meas(time, moi1, moi2);
   in
   (try
      ignore (Db_writer.write db [meas]);
-     let direct = new Postgresql.connection ~conninfo:(Lazy.force conninfo) () in
+     let direct = Db_writer.Internal.new_pg_connection (Lazy.force db_spec) in
      let result = direct#exec ~expect:[Postgresql.Tuples_ok] "SELECT extract(epoch from time), moi1, moi2, fields->>'value' FROM meas" in
      match result#get_all_lst with
      | [[time; moi1; moi2; value]] ->

@@ -1,9 +1,7 @@
 type t
 
-type conninfo = string
-
 type config = {
-  databases: (string * conninfo) list;
+  databases: (string * Db_writer.db_spec) list;
 }
 
 type error = Invalid_database_name of string

@@ -12,8 +12,20 @@ type error =
 
 exception Error of error
 
+type db_info = {
+  db_host: string;
+  db_port: int;
+  db_user: string;
+  db_password: string;
+  db_name: string;
+}
+
+type db_spec =
+  | DbInfo of db_info
+  | DbConnInfo of string
+
 type config = {
-  conninfo : string;
+  db_spec : db_spec;
   time_field : string;
   tags_column: string option;   (* using tags column? then this is its name *)
   fields_column: string option;   (* using fields column? then this is its name *)
@@ -22,7 +34,7 @@ type config = {
 (** [string_of_error error] converts the error to a string *)
 val string_of_error : error -> string
 
-(** [create conninfo] connects to the given database; can raise PgError if it fails *)
+(** [create db_spec] connects to the given database; can raise PgError if it fails *)
 val create : config -> t
 
 (** [close t] disconnects from the database. Can raise. *)
@@ -38,6 +50,7 @@ val write : t -> Lexer.measurement list -> unit
 
 (** exposed for unit testing *)
 module Internal: sig
+  val new_pg_connection : db_spec -> Pg.connection
   val db_of_identifier : string -> string
   val insert_of_measurement : t -> Lexer.measurement -> string * string array
 end

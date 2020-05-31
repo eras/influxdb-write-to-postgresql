@@ -33,13 +33,13 @@ let handle_request body db =
   | `Error error -> error
 
 let server =
-  let conninfo =
-    try Unix.getenv conninfo_env_name
+  let db_spec =
+    try Db_writer.DbConnInfo (Unix.getenv conninfo_env_name)
     with Not_found ->
       Printf.eprintf "Environment variable %s not provided, exiting\n" conninfo_env_name;
       exit 1
   in
-  let db_spool = Db_spool.create { Db_spool.databases = [("default", conninfo)] } in
+  let db_spool = Db_spool.create { Db_spool.databases = [("default", db_spec)] } in
   let callback _conn req body =
     let _uri = req |> Cohttp.Request.uri |> Uri.to_string in
     let query = req |> Cohttp.Request.uri |> Uri.query in

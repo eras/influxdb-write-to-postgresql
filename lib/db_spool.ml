@@ -1,13 +1,11 @@
-type conninfo = string
-
 type config = {
-  databases: (string * conninfo) list;
+  databases: (string * Db_writer.db_spec) list;
 }
 
 module DatabaseNameMap = Map.Make(struct type t = string let compare = compare end)
 
 type db_status = {
-  conninfo: conninfo;
+  db_spec: Db_writer.db_spec;
   mutable available: Db_writer.t list;
 }
 
@@ -38,8 +36,8 @@ let create config =
   List.iter (fun (name, _) -> ignore (validate_name name)) config.databases;
   let dbs =
     List.to_seq config.databases
-    |> Seq.map (fun (name, conninfo) ->
-        (name, { conninfo; available = [] })
+    |> Seq.map (fun (name, db_spec) ->
+        (name, { db_spec; available = [] })
       )
     |> DatabaseNameMap.of_seq in
   { config; dbs }
@@ -54,7 +52,7 @@ let db t name =
     match db_status.available with
     | [] ->
       let config = {
-        Db_writer.conninfo = db_status.conninfo;
+        Db_writer.db_spec = db_status.db_spec;
         time_field = "time";
         tags_column = None;
         fields_column = None;

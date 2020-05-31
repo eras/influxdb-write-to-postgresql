@@ -5,8 +5,20 @@ type quote_mode = QuoteAlways
 module FieldMap = Map.Make(struct type t = string let compare = compare end)
 module TableMap = Map.Make(struct type t = string let compare = compare end)
 
+type db_info = {
+  db_host: string;
+  db_port: int;
+  db_user: string;
+  db_password: string;
+  db_name: string;
+}
+
+type db_spec =
+  | DbInfo of db_info
+  | DbConnInfo of string
+
 type config = {
-  conninfo : string;
+  db_spec : db_spec;
   time_field : string;
   tags_column: string option;   (* using tags column? then this is its name *)
   fields_column: string option;   (* using fields column? then this is its name *)
@@ -267,13 +279,18 @@ struct
         (tablename, List.filter_map snd xs)
       )
     |> List.to_seq
+
+  let new_pg_connection = function
+    | DbInfo { db_host; db_port; db_user; db_password; db_name } ->
+      new Pg.connection ~host:db_host ~port:(string_of_int db_port) ~user:db_user ~password:db_password ~dbname:db_name ()
+    | DbConnInfo conninfo -> new Pg.connection ~conninfo ()
 end
 
 open Internal
 
 let create (config : config) =
   try
-    let db = new Pg.connection ~conninfo:config.conninfo () in
+    let db = new_pg_connection config.db_spec in
     let quote_mode = QuoteAlways in
     let quoted_time_field = db_of_identifier (config.time_field) in
     let subsecond_time_field = false in
@@ -291,7 +308,7 @@ let close t =
 let reconnect t =
   ( try close t
     with _ -> (* eat *) () );
-  t.db <- new Pg.connection ~conninfo:t.config.conninfo ()
+  t.db <- new_pg_connection t.config.db_spec
 
 let string_of_error error =
   match error with

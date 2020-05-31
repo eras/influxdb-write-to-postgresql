@@ -114,7 +114,7 @@ let container_info = lazy (
 
 type 'db_writer db_test_context = {
   db: 'db_writer;               (* at with_new_db we don't have this *)
-  conninfo: string Lazy.t;
+  db_spec: Db_writer.db_spec Lazy.t;
 }
 
 let retry f =
@@ -133,45 +133,49 @@ let retry f =
 
 let create_new_database =
   let db_id_counter = ref 0 in
-  fun schema conninfo ->
+  fun schema db_spec ->
     let name = Printf.sprintf "test_db_%03d" !db_id_counter in
     let _ = incr db_id_counter in
     let pg = retry @@ fun () ->
-      new Postgresql.connection ~conninfo ()
+      Db_writer.Internal.new_pg_connection db_spec
     in
     ignore (pg#exec ~expect:[Postgresql.Command_ok] (Printf.sprintf {|
 CREATE DATABASE %s
 |} (Db_writer.Internal.db_of_identifier name)));
     pg#finish;
-    let conninfo_with_dbname = (conninfo ^ " dbname=" ^ name) in
-    let pg = new Postgresql.connection ~conninfo:conninfo_with_dbname () in
+    let conninfo_with_dbname =
+      match db_spec with
+      | Db_writer.DbInfo x -> Db_writer.DbInfo { x with db_name = name }
+      | Db_writer.DbConnInfo x -> Db_writer.DbConnInfo (x ^ " dbname=" ^ name)
+    in
+    let pg = Db_writer.Internal.new_pg_connection conninfo_with_dbname in
     ignore (pg#exec ~expect:[Postgresql.Command_ok] schema);
     pg#finish;
     conninfo_with_dbname
 
 let with_conninfo _ctx f =
   let pg_port = lazy ((PortMap.find "5432/tcp" (Lazy.force container_info).ci_ports).host_port) in
-  let conninfo = lazy ("user=postgres password=test host=localhost port=" ^ string_of_int (Lazy.force pg_port)) in
+  let db_spec = lazy (Db_writer.DbConnInfo ("user=postgres password=test host=localhost port=" ^ string_of_int (Lazy.force pg_port))) in
   try
-    f { db = (); conninfo }
+    f { db = (); db_spec }
   with Postgresql.Error error ->
     Printf.ksprintf OUnit2.assert_failure "Postgresql.Error: %s" (Postgresql.string_of_error error)
 
 let with_new_db ctx schema f =
-  with_conninfo ctx @@ fun { conninfo; db = () } ->
-  let conninfo = lazy (create_new_database schema (Lazy.force conninfo)) in
-  f { db = (); conninfo; }
+  with_conninfo ctx @@ fun { db_spec; db = () } ->
+  let db_spec = lazy (create_new_database schema (Lazy.force db_spec)) in
+  f { db = (); db_spec; }
 
-let make_db_writer_config conninfo =
-  { Db_writer.conninfo = Lazy.force conninfo;
+let make_db_writer_config db_spec =
+  { Db_writer.db_spec = Lazy.force db_spec;
     time_field = "time";
     tags_column = None;
     fields_column = None; }
 
 let with_db_writer ?(make_config=make_db_writer_config) (ctx : OUnit2.test_ctxt) ~schema (f : Db_writer.t Lazy.t db_test_context -> 'a) : 'a =
-  with_new_db ctx schema @@ fun { conninfo; _ } ->
-  let db = lazy (Db_writer.create (make_config conninfo)) in
-  let ret = valuefy f { db; conninfo } in
+  with_new_db ctx schema @@ fun { db_spec; _ } ->
+  let db = lazy (Db_writer.create (make_config db_spec)) in
+  let ret = valuefy f { db; db_spec } in
   if Lazy.is_val db then
     Db_writer.close (Lazy.force db);
   (match ret with
