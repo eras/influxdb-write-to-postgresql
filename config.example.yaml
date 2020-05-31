@@ -1,0 +1,73 @@
+---
+groups:
+  testgroup:
+    expires: 1590925427
+
+users:
+  testuser:
+    group: testgroup # optional
+    password: hashhashhash
+    expires: 1590925427
+
+    # if token is provided, then client does not need to provide
+    # user name (but it still matches this user)
+
+    # token: y3y7fy78eyhueu78yhdf78yd78gy74fasdjf4ji
+
+# TODO: How to handle this in order in Yaml?
+# regexp_users:
+#   /.*/:
+#     # you must provide either password or token, but
+#     # they can be left empty
+#     password: ''
+
+databases:
+  somedb:
+    db_host: port0.mf
+    db_port: 5432
+
+    # if db_name is omitted, the db_ config name "somedb" is used
+    db_name: test
+
+    db_user: user42
+
+    db_password: passw0rd
+
+    # # alternatively:
+    # # use_user_db_credentials: true
+
+    # # set the time column if its name is not "time":
+    # time_column: time
+
+    # # if you want to put tags in a JSONB column:
+    # tags_jsonb_column: tags
+    # # otherwise tag columns are fixed and automatically
+    # # determined from your unique index
+
+    # # if you want to define which tags make up the tags:
+    # # (note that if tags_jsonb_column is set, then these
+    # # limit which keys to use from it)
+    # tag_colummns:
+    #   - tag1
+    #   - tag2
+
+    # # if you want to put fields in a JSONB column:
+    # fields_jsonb_column: fields
+    # # otherwise fields columns are automatically created as needed
+    # # but if you want to define which fields are permitted:
+    # # (note that if fields_jsonb_column is set, then these
+    # # limit which keys to use from it)
+    # field_columns:
+    #   - field1
+    #   - field2
+
+# TODO:
+# regexp_databases:
+#   - /(.*)/:
+#     # regular expressions can also be used; evaluted from first to last
+
+#     db_host: port0.mf
+#     db_port: 5423
+
+#     # not required:
+#     db_name: $1

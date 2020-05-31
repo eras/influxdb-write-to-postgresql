@@ -6,6 +6,7 @@ let suite =
     Test_db_writer.suite;
     Test_db_spool.suite;
     Test_sql.suite;
+    Test_config.suite;
   ]
 
 let () =

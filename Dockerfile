@@ -8,6 +8,9 @@ RUN opam install uutf
 RUN opam install yojson
 RUN opam install -y menhir
 RUN opam install containers
+RUN sudo apt-get -y install pkg-config
+RUN opam install -y yaml decoders-yojson
+RUN opam install -y ppx_deriving_yojson
 
 COPY dune-project influxdb_write_to_postgresql.* /work/
 COPY bin /work/bin/
