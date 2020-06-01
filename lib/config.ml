@@ -52,20 +52,6 @@ type database = {
   field_columns: (string list option [@default None]);
 } [@@deriving yojson]
 
-(* let associative_of_yojson _of_yojson = function
- *   | (`Assoc (_k, _xs)) -> failwith "a"
- *   | _ -> assert false *)
-
-(* let associative_of_yojson _of_yojson : [> `List of Yojson.Safe.t list ] -> (_, string) result = function
- *   | `List _xs ->
- *     assert false *)
-(*   | _ -> Error "Expected list of databases" *)
-
-let _foo :
-    (Yojson.Safe.t -> 'matches Ppx_deriving_yojson_runtime.error_or) ->
-    Yojson.Safe.t -> database Ppx_deriving_yojson_runtime.error_or =
-  fun _ -> assert false
-
 let associative_of_yojson
     (of_yojson: Yojson.Safe.t -> ('result, string) result)
     (xs: Yojson.Safe.t) :
@@ -92,7 +78,7 @@ let _option_of_yojson of_yojson yojson =
     match of_yojson other with
     | Ok x -> Ok (Some x)
     | Error x -> Error x
-    
+
 let list_or_empty_of_yojson of_yojson yojson =
   match yojson with
   | `Null -> Ok []
@@ -100,13 +86,13 @@ let list_or_empty_of_yojson of_yojson yojson =
     match of_yojson other with
     | Ok x -> Ok x
     | Error x -> Error x
-    
+
 type t = {
   users : (string * user) list [@of_yojson (associative_of_yojson user_of_yojson)];
   regexp_users : ((string * user) list[@default []]  [@of_yojson (list_or_empty_of_yojson (associative_of_yojson user_of_yojson))]);
 
   groups: ((string * group) list [@default []] [@of_yojson (list_or_empty_of_yojson (associative_of_yojson group_of_yojson))]);
-  
+
   databases: (string * database) list [@of_yojson (associative_of_yojson database_of_yojson)];
   regexp_databases: (string * database) list [@default []] [@of_yojson (associative_of_yojson database_of_yojson)];
 } [@@deriving yojson]
