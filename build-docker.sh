@@ -1,2 +1,2 @@
 #!/bin/sh
-docker build -t iwtp .
+docker build -t iw2pg .

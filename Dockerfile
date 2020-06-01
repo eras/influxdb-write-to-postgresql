@@ -13,7 +13,7 @@ RUN opam install -y yaml decoders-yojson
 RUN opam install -y ppx_deriving_yojson
 
 COPY dune-project influxdb_write_to_postgresql.* /work/
-COPY bin /work/bin/
+COPY main /work/main/
 COPY lib /work/lib/
 COPY test /work/test/
 
@@ -32,8 +32,8 @@ FROM debian:buster-slim
 RUN apt-get update && apt-get install -y libpq5 ca-certificates
 RUN rm -rf /var/cache/apt /var/lib/apt
 WORKDIR /app
-COPY --from=builder /work/_build/default/bin/main.exe /app/influxdb-write-to-postgresql
+COPY --from=builder /work/_build/default/main/iw2pg.exe /app/iw2pg
 
-RUN ls -l /app/influxdb-write-to-postgresql
+RUN ls -l /app/iw2pg
 
-ENTRYPOINT ["/app/influxdb-write-to-postgresql"]
+ENTRYPOINT ["/app/iw2pg"]
