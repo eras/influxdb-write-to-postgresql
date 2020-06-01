@@ -52,6 +52,16 @@ type database = {
   field_columns: (string list option [@default None]);
 } [@@deriving yojson]
 
+let db_spec_of_database : database -> Db_writer.db_spec =
+  fun { db_name; db_host; db_port; db_user; db_password; _ } ->
+  Db_writer.DbInfo {
+    Db_writer.db_host;
+    db_port;
+    db_user;
+    db_password;
+    db_name;
+  }
+
 let associative_of_yojson
     (of_yojson: Yojson.Safe.t -> ('result, string) result)
     (xs: Yojson.Safe.t) :
@@ -88,7 +98,7 @@ let list_or_empty_of_yojson of_yojson yojson =
     | Error x -> Error x
 
 type t = {
-  users : (string * user) list [@of_yojson (associative_of_yojson user_of_yojson)];
+  users : (string * user) list [@default []] [@of_yojson (associative_of_yojson user_of_yojson)];
   regexp_users : ((string * user) list[@default []]  [@of_yojson (list_or_empty_of_yojson (associative_of_yojson user_of_yojson))]);
 
   groups: ((string * group) list [@default []] [@of_yojson (list_or_empty_of_yojson (associative_of_yojson group_of_yojson))]);

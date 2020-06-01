@@ -1,6 +1,6 @@
 (executables
- (libraries lwt postgresql cohttp-lwt-unix sedlex influxdb_write_to_postgresql)
  (names iw2pg)
+ (libraries lwt postgresql cohttp-lwt-unix sedlex influxdb_write_to_postgresql cmdliner)
  (preprocess (pps lwt_ppx sedlex.ppx)))
 
 (install

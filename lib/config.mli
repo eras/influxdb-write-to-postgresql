@@ -30,6 +30,8 @@ type database = {
   field_columns : string list option;
 }
 
+val db_spec_of_database : database -> Db_writer.db_spec
+
 type t = {
   users : (string * user) list;
   regexp_users : (string * user) list;

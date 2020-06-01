@@ -11,6 +11,7 @@ RUN opam install containers
 RUN sudo apt-get -y install pkg-config
 RUN opam install -y yaml decoders-yojson
 RUN opam install -y ppx_deriving_yojson
+RUN opam install -y cmdliner
 
 COPY dune-project influxdb_write_to_postgresql.* /work/
 COPY main /work/main/

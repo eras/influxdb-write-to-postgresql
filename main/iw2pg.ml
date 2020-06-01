@@ -1,11 +1,12 @@
 open Lwt
 open Cohttp
 open Cohttp_lwt_unix
-module Lexer = Influxdb_write_to_postgresql.Lexer
-module Db_writer = Influxdb_write_to_postgresql.Db_writer
-module Db_spool = Influxdb_write_to_postgresql.Db_spool
+open Influxdb_write_to_postgresql
 
-let conninfo_env_name = "IWTP_CONNINFO"
+type prog_config = {
+  listen_port: int;
+  config_file: string;
+}
 
 let handle_request body db =
   body |> Cohttp_lwt.Body.to_string >|= fun body ->
@@ -32,14 +33,28 @@ let handle_request body db =
   | `Ok _results -> "OK"
   | `Error error -> error
 
-let server =
-  let db_spec =
-    try Db_writer.DbConnInfo (Unix.getenv conninfo_env_name)
-    with Not_found ->
-      Printf.eprintf "Environment variable %s not provided, exiting\n" conninfo_env_name;
-      exit 1
+let server prog_config =
+  let config = Config.load prog_config.config_file in
+  let databases =
+    config.databases |> Common.map_snd Config.db_spec_of_database
   in
-  let db_spool = Db_spool.create { Db_spool.databases = [("default", db_spec)] } in
+  let _users =
+    if config.users <> [] then
+      failwith "Users not yet supported"
+  in
+  let _regexp_users =
+    if config.regexp_users <> [] then
+      failwith "Regexp users not yet supported"
+  in
+  let _groups =
+    if config.groups <> [] then
+      failwith "Groups not yet supported"
+  in
+  let _regexp_databases =
+    if config.regexp_databases <> [] then
+      failwith "Regexp databases not yet supported"
+  in
+  let db_spool = Db_spool.create { Db_spool.databases } in
   let callback _conn req body =
     let _uri = req |> Cohttp.Request.uri |> Uri.to_string in
     let query = req |> Cohttp.Request.uri |> Uri.query in
@@ -67,6 +82,17 @@ let server =
     )
     >>= (fun body -> Server.respond_string ~status:`OK ~body ())
   in
-  Server.create ~mode:(`TCP (`Port 8080)) (Server.make ~callback ())
+  Server.create ~mode:(`TCP (`Port prog_config.listen_port)) (Server.make ~callback ())
 
-let () = ignore (Lwt_main.run server)
+let iw2pg prog_config = ignore (Lwt_main.run (server prog_config))
+
+let main () =
+  let open Cmdliner in
+  let open Cmdargs in
+  let wrap_to_prog_config listen_port config_file =
+    iw2pg { listen_port; config_file }
+  in
+  let iw2pg_t = Term.(const wrap_to_prog_config $ port $ config_file) in
+  Term.exit @@ Term.eval (iw2pg_t, Term.info "iw2pg")
+
+let _ = main ()
