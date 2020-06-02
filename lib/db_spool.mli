@@ -1,7 +1,7 @@
 type t
 
 type config = {
-  databases: (string * Db_writer.db_spec) list;
+  databases: (string * Db_writer.config) list;
 }
 
 type error = Invalid_database_name of string

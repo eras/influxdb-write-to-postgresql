@@ -9,7 +9,13 @@ CREATE TABLE meas(time timestamptz NOT NULL);
 CREATE UNIQUE INDEX meas_time_dx ON meas(time);
 |} in
   let db_spec = Test_utils.create_new_database schema db_spec in
-  let config = { Db_spool.databases = [("default", db_spec)] } in
+  let db_config = {
+    Db_writer.db_spec;
+    time_column = "time";
+    tags_column = None;
+    fields_column = None;
+  } in
+  let config = { Db_spool.databases = [("default", db_config)] } in
   let spool = Db_spool.create config in
   (match Db_spool.db spool "default" with
    | None -> assert_failure "Expected to get a database (default) but did not (1)";

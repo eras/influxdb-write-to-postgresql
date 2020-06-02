@@ -31,6 +31,7 @@ type database = {
 }
 
 val db_spec_of_database : database -> Db_writer.db_spec
+val db_config_of_database : database -> Db_writer.config
 
 type t = {
   users : (string * user) list;
