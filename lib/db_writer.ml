@@ -33,14 +33,14 @@ type field_type =
 
 let db_of_field_type = function
   | FT_Int         -> "integer"
-  | FT_Float       -> "double prescision"
+  | FT_Float       -> "double precision"
   | FT_String      -> "text"
   | FT_Boolean     -> "boolean"
   | FT_Unknown str -> str
 
 let field_type_of_db = function
   | "integer"           -> FT_Int
-  | "double prescision" -> FT_Float
+  | "double precision"  -> FT_Float
   | "numeric"           -> FT_Float
   | "text" | "varchar"  -> FT_String
   | "boolean"           -> FT_Boolean
