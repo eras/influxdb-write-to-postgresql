@@ -19,7 +19,7 @@ type db_spec =
 
 type config = {
   db_spec : db_spec;
-  time_field : string;
+  time_column : string;
   tags_column: string option;   (* using tags column? then this is its name *)
   fields_column: string option;   (* using fields column? then this is its name *)
 }
@@ -292,7 +292,7 @@ let create (config : config) =
   try
     let db = new_pg_connection config.db_spec in
     let quote_mode = QuoteAlways in
-    let quoted_time_field = db_of_identifier (config.time_field) in
+    let quoted_time_field = db_of_identifier (config.time_column) in
     let subsecond_time_field = false in
     let known_columns = query_column_info db in
     let indices = query_indices db |> TableMap.of_seq in

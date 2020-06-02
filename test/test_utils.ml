@@ -168,7 +168,7 @@ let with_new_db ctx schema f =
 
 let make_db_writer_config db_spec =
   { Db_writer.db_spec = Lazy.force db_spec;
-    time_field = "time";
+    time_column = "time";
     tags_column = None;
     fields_column = None; }
 

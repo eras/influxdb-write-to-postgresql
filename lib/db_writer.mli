@@ -26,7 +26,7 @@ type db_spec =
 
 type config = {
   db_spec : db_spec;
-  time_field : string;
+  time_column : string;
   tags_column: string option;   (* using tags column? then this is its name *)
   fields_column: string option;   (* using fields column? then this is its name *)
 }

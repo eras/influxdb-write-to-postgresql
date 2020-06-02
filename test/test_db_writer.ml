@@ -70,7 +70,7 @@ CREATE UNIQUE INDEX meas_time_idx ON meas(time, tags);
 |} in
   let make_config db_spec =
     { Db_writer.db_spec = Lazy.force db_spec;
-      time_field = "time";
+      time_column = "time";
       tags_column = Some "tags";
       fields_column = None; }
   in
@@ -98,7 +98,7 @@ CREATE UNIQUE INDEX meas_time_idx ON meas(time, moi1, moi2);
 |} in
   let make_config db_spec =
     { Db_writer.db_spec = Lazy.force db_spec;
-      time_field = "time";
+      time_column = "time";
       tags_column = None;
       fields_column = Some "fields"; }
   in
@@ -243,7 +243,7 @@ CREATE UNIQUE INDEX meas_time_idx ON meas(time, tags);
 |} in
   let make_config db_spec =
     { Db_writer.db_spec = Lazy.force db_spec;
-      time_field = "time";
+      time_column = "time";
       tags_column = Some "tags";
       fields_column = None; }
   in
@@ -280,7 +280,7 @@ CREATE UNIQUE INDEX meas_time_idx ON meas(time, moi1, moi2);
 |} in
   let make_config db_spec =
     { Db_writer.db_spec = Lazy.force db_spec;
-      time_field = "time";
+      time_column = "time";
       tags_column = None;
       fields_column = Some "fields"; }
   in
