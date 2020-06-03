@@ -50,7 +50,24 @@ val write : t -> Lexer.measurement list -> unit
 
 (** exposed for unit testing *)
 module Internal: sig
+  module FieldMap: Map.S with type key = string
+
+  type field_type =
+    | FT_String
+    | FT_Int
+    | FT_Float
+    | FT_Boolean
+    | FT_Jsonb
+    | FT_Timestamptz
+    | FT_Unknown of string
+
+  type table_info = {
+    fields: field_type FieldMap.t
+  }
+
   val new_pg_connection : db_spec -> Pg.connection
   val db_of_identifier : string -> string
+  val db_of_field_type : field_type -> string
   val insert_of_measurement : t -> Lexer.measurement -> string * string array
+  val make_table_query : t -> Lexer.measurement -> string * table_info
 end

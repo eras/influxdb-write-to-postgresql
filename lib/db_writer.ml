@@ -2,9 +2,6 @@ module Pg = Postgresql
 
 type quote_mode = QuoteAlways
 
-module FieldMap = Map.Make(struct type t = string let compare = compare end)
-module TableMap = Map.Make(struct type t = string let compare = compare end)
-
 type db_info = {
   db_host: string;
   db_port: int;
@@ -24,37 +21,61 @@ type config = {
   fields_column: string option;   (* using fields column? then this is its name *)
 }
 
-type field_type =
-  | FT_String
-  | FT_Int
-  | FT_Float
-  | FT_Boolean
-  | FT_Unknown of string
+module Internal0 =
+struct
+  module FieldMap = Map.Make(struct type t = string let compare = compare end)
+  module TableMap = Map.Make(struct type t = string let compare = compare end)
 
-let db_of_field_type = function
-  | FT_Int         -> "integer"
-  | FT_Float       -> "double precision"
-  | FT_String      -> "text"
-  | FT_Boolean     -> "boolean"
-  | FT_Unknown str -> str
+  type field_type =
+    | FT_String
+    | FT_Int
+    | FT_Float
+    | FT_Boolean
+    | FT_Jsonb
+    | FT_Timestamptz
+    | FT_Unknown of string
 
-let field_type_of_db = function
-  | "integer"           -> FT_Int
-  | "double precision"  -> FT_Float
-  | "numeric"           -> FT_Float
-  | "text" | "varchar"  -> FT_String
-  | "boolean"           -> FT_Boolean
-  | name                -> FT_Unknown name
+  let db_of_field_type = function
+    | FT_Int         -> "integer"
+    | FT_Float       -> "double precision"
+    | FT_String      -> "text"
+    | FT_Boolean     -> "boolean"
+    | FT_Jsonb       -> "jsonb"
+    | FT_Timestamptz -> "timestamptz"
+    | FT_Unknown str -> str
 
-let field_type_of_value = function
-  | Lexer.String _   -> FT_String
-  | Lexer.Int _      -> FT_Int
-  | Lexer.FloatNum _ -> FT_Float
-  | Lexer.Boolean _  -> FT_Boolean
+  let not_null x = x ^ " NOT NULL"
+  let db_concat = String.concat ", "
 
-type table_name = string
+  let field_type_of_db = function
+    | "integer"           -> FT_Int
+    | "double precision"  -> FT_Float
+    | "numeric"           -> FT_Float
+    | "text" | "varchar"  -> FT_String
+    | "boolean"           -> FT_Boolean
+    | "jsonb"             -> FT_Jsonb
+    | "timestamptz"       -> FT_Timestamptz
+    | name                -> FT_Unknown name
 
-type column_info = (table_name, field_type FieldMap.t) Hashtbl.t
+  let field_type_of_value = function
+    | Lexer.String _   -> FT_String
+    | Lexer.Int _      -> FT_Int
+    | Lexer.FloatNum _ -> FT_Float
+    | Lexer.Boolean _  -> FT_Boolean
+
+  type table_name = string
+
+  type table_info = {
+    fields: field_type FieldMap.t
+  }
+end
+
+open Internal0
+
+
+let map_fields f table_info = { fields = f table_info.fields }
+
+type database_info = (table_name, table_info) Hashtbl.t
 
 type t = {
   mutable db: Pg.connection; (* mutable for reconnecting *)
@@ -62,11 +83,11 @@ type t = {
   quoted_time_field: string;
   subsecond_time_field: bool;
   config: config;
-  mutable known_columns: column_info;
+  mutable database_info: database_info;
   indices: string list list TableMap.t;
 }
 
-let create_column_info () = Hashtbl.create 10
+let create_database_info () : database_info = Hashtbl.create 10
 
 type query = string
 
@@ -92,6 +113,8 @@ end
 
 module Internal =
 struct
+  include Internal0
+
   let db_of_identifier x =
     try Common.db_of_identifier x
     with Common.Error Common.MalformedUTF8 ->
@@ -204,9 +227,9 @@ struct
   let db_update_set t meas =
     match t.config.fields_column with
     | None ->
-      String.concat ", " (List.concat [db_fields meas] |>
-                          List.map @@ fun field ->
-                          field ^ "=" ^ "excluded." ^ field)
+      db_concat (List.concat [db_fields meas] |>
+                 List.map @@ fun field ->
+                 field ^ "=" ^ "excluded." ^ field)
     | Some fields ->
       db_of_identifier fields ^ "=" ^
       db_of_identifier meas.measurement ^ "." ^ db_of_identifier fields ^ "||" ^
@@ -220,9 +243,9 @@ struct
   let insert_of_measurement t (meas : Lexer.measurement) =
     let query =
       "INSERT INTO " ^ db_of_identifier meas.measurement ^
-      "(" ^ String.concat ", " (db_insert_fields t meas) ^ ")" ^
-      "\nVALUES (" ^ String.concat ", " (db_insert_values t meas) ^ ")" ^
-      "\nON CONFLICT(" ^ String.concat ", " (conflict_tags t meas) ^ ")" ^
+      "(" ^ db_concat (db_insert_fields t meas) ^ ")" ^
+      "\nVALUES (" ^ db_concat (db_insert_values t meas) ^ ")" ^
+      "\nON CONFLICT(" ^ db_concat (conflict_tags t meas) ^ ")" ^
       "\nDO UPDATE SET " ^ db_update_set t meas
     in
     let params = db_insert_tag_values t meas @ db_insert_field_values t meas in
@@ -239,18 +262,18 @@ struct
     in
     (query, time @ params |> Array.of_list)
 
-  let query_column_info (db: Pg.connection) =
+  let query_database_info (db: Pg.connection) =
     let result = db#exec ~expect:[Pg.Tuples_ok] "SELECT table_name, column_name, data_type FROM INFORMATION_SCHEMA.COLUMNS" in
-    let column_info = create_column_info () in
+    let database_info = create_database_info () in
     let () = result#get_all_lst |> List.iter @@ function
     | [table_name; column_name; data_type] ->
-      Hashtbl.find_opt column_info table_name
-      |> Option.value ~default:FieldMap.empty
-      |> FieldMap.add column_name (field_type_of_db data_type)
-      |> Hashtbl.add column_info table_name
+      Hashtbl.find_opt database_info table_name
+      |> Option.value ~default:{ fields = FieldMap.empty }
+      |> map_fields (FieldMap.add column_name (field_type_of_db data_type))
+      |> Hashtbl.add database_info table_name
     | _ -> assert false
     in
-    column_info
+    database_info
 
   let primary_keys_of_index = function
     | Sql.CreateIndex {
@@ -284,6 +307,37 @@ struct
     | DbInfo { db_host; db_port; db_user; db_password; db_name } ->
       new Pg.connection ~host:db_host ~port:(string_of_int db_port) ~user:db_user ~password:db_password ~dbname:db_name ()
     | DbConnInfo conninfo -> new Pg.connection ~conninfo ()
+
+  let db_fields_and_types (measurement : Lexer.measurement) =
+    List.map (fun (name, value) -> (name, field_type_of_value value)) measurement.fields
+
+  let db_tags_and_types (measurement : Lexer.measurement) =
+    List.map (fun (name, _) -> (name, FT_String)) measurement.tags
+
+  let make_table_query (t : t) (measurement : Lexer.measurement) : string * table_info =
+    let table_name = measurement.measurement in
+    let dbify (name, type_) = (db_of_identifier name, db_of_field_type type_) in
+    let field_columns =
+      (match t.config.fields_column with
+       | None -> db_fields_and_types measurement
+       | Some field -> [(field, FT_Jsonb)])
+    in
+    let db_field_columns = field_columns |> List.map dbify in
+    let pk_columns =
+      (db_of_identifier t.config.time_column, FT_Timestamptz)::
+      (match t.config.tags_column with
+       | None -> (db_tags_and_types measurement)
+       | Some tags -> [(tags, FT_Jsonb)])
+    in
+    let db_pk_columns = pk_columns |> List.map dbify |>  Common.map_snd not_null in
+    let join (a, b) = a ^ " " ^ b in
+    let query =
+      "CREATE TABLE " ^ db_of_identifier table_name ^
+      " (" ^ db_concat (((db_pk_columns @ db_field_columns) |> List.map join) @
+                          ["PRIMARY KEY(" ^ db_concat (List.map fst db_pk_columns) ^ ")"]) ^ ")"
+    in
+    let table_info = { fields = (pk_columns @ field_columns) |> List.to_seq |> FieldMap.of_seq } in
+    (query, table_info)
 end
 
 open Internal
@@ -294,10 +348,10 @@ let create (config : config) =
     let quote_mode = QuoteAlways in
     let quoted_time_field = db_of_identifier (config.time_column) in
     let subsecond_time_field = false in
-    let known_columns = query_column_info db in
+    let database_info = query_database_info db in
     let indices = query_indices db |> TableMap.of_seq in
     { db; quote_mode; quoted_time_field; subsecond_time_field;
-      known_columns; indices;
+      database_info; indices;
       config }
   with Pg.Error error ->
     raise (Error (PgError (error, None)))
@@ -315,7 +369,7 @@ let string_of_error error =
   | PgError (error, None) -> Pg.string_of_error error
   | PgError (error, Some query) -> Pg.string_of_error error ^ " for " ^ query
   | MalformedUTF8 -> "Malformed UTF8"
-  | CannotAddTags tags -> "Cannot add tags " ^ String.concat ", " (List.map db_of_identifier tags)
+  | CannotAddTags tags -> "Cannot add tags " ^ db_concat (List.map db_of_identifier tags)
   | NoPrimaryIndexFound table -> "No primary index found for table " ^ table
 
 let _ = Printexc.register_printer (function
@@ -323,24 +377,31 @@ let _ = Printexc.register_printer (function
     | _ -> None
   )
 
+let update hashtbl default key f =
+  match Hashtbl.find_opt hashtbl key with
+  | None -> Hashtbl.add hashtbl key (f default)
+  | Some value -> Hashtbl.add hashtbl key (f value)
+
 (** Ensure database has the columns we need *)
 let check_and_update_columns ~kind t table_name values =
   let missing_columns, new_columns =
     List.fold_left
-      (fun (to_create, known_columns) (field_name, field_type) ->
-         if FieldMap.mem field_name known_columns
-         then (to_create, known_columns)
-         else ((field_name, field_type)::to_create, FieldMap.add field_name field_type known_columns)
+      (fun (to_create, table_info) (field_name, field_type) ->
+         if FieldMap.mem field_name table_info
+         then (to_create, table_info)
+         else ((field_name, field_type)::to_create, FieldMap.add field_name field_type table_info)
       )
       ([],
-       try Hashtbl.find t.known_columns table_name
+       try (Hashtbl.find t.database_info table_name).fields
        with Not_found -> FieldMap.empty)
       values
   in
   match missing_columns, kind, t.config.tags_column with
   | [], _, _ -> ()
   | missing_columns, `Fields, _ ->
-    Hashtbl.add t.known_columns table_name new_columns;
+    update t.database_info { fields = FieldMap.empty } table_name (fun _table_info ->
+        { fields = new_columns }
+      );
     missing_columns |> List.iter @@ fun (field_name, field_type) ->
     ignore (t.db#exec ~expect:[Pg.Command_ok]
               (Printf.sprintf "ALTER TABLE %s ADD COLUMN IF NOT EXISTS %s %s"
@@ -354,6 +415,15 @@ let check_and_update_columns ~kind t table_name values =
   | _, `Tags, Some _ ->
     () (* these are inside a json and will be added dynamically *)
 
+let check_and_update_tables (t : t) (measurement : Lexer.measurement) =
+  let table_name = measurement.measurement in
+  if Hashtbl.mem t.database_info table_name then
+    ()
+  else
+    let (query, table_info) = make_table_query t measurement in
+    Hashtbl.add t.database_info table_name table_info;
+    ignore (t.db#exec ~expect:[Pg.Command_ok] query)
+
 let write t (measurements: Lexer.measurement list) =
   try
     ignore (t.db#exec ~expect:[Pg.Command_ok] "BEGIN TRANSACTION");
@@ -361,8 +431,9 @@ let write t (measurements: Lexer.measurement list) =
     List.iter (
       fun measurement -> 
         let (query, params) = insert_of_measurement t measurement in
-        let field_types = List.map (fun (name, value) -> (name, field_type_of_value value)) measurement.fields in
-        let tag_types = List.map (fun (name, _) -> (name, FT_String)) measurement.tags in
+        let field_types = db_fields_and_types measurement in
+        let tag_types = db_tags_and_types measurement in
+        let () = check_and_update_tables t measurement in
         let () = check_and_update_columns ~kind:`Tags t measurement.measurement tag_types in
         let () = check_and_update_columns ~kind:`Fields t measurement.measurement field_types in
         try

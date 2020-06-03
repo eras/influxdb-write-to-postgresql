@@ -40,6 +40,86 @@ ON CONFLICT(time, moi1, moi2)
 DO UPDATE SET value=excluded.value|} (fst query);
   assert_equal ~printer:(fun x -> Array.to_list x |> String.concat ",") (snd query) [|"1590329952"; "1"; "2"; "42"|]
 
+let string_of_key_field_type (str, field_type) =
+  str ^ " " ^ Db_writer.Internal.db_of_field_type field_type
+
+let string_of_list f xs =
+  String.concat ", " (List.map f xs)
+
+let testCreateTable ctx =
+  let schema = {|
+CREATE TABLE meas(time timestamptz NOT NULL,
+                  moi1 text NOT NULL DEFAULT(''),
+                  moi2 text NOT NULL DEFAULT(''));
+CREATE UNIQUE INDEX meas_time_idx ON meas(time, moi1, moi2);
+|} in
+  Test_utils.with_db_writer ctx ~schema @@ fun { db; _ } ->
+  let db = Lazy.force db in
+  let meas =
+    Lexer.make_measurement
+      ~measurement:"meas"
+      ~tags:[("moi1", "");("moi2", "2")]
+      ~fields:[("k_int", Lexer.Int 42L);
+               ("k_float", Lexer.FloatNum 42.0);
+               ("k_string", Lexer.String "42");
+               ("k_bool", Lexer.Boolean true);]
+      ~time:(Some 1590329952000000000L)
+  in
+  let (query, table_info) = Db_writer.Internal.make_table_query db meas in
+  assert_equal ~printer:identity
+    {|CREATE TABLE meas (time timestamptz NOT NULL, moi1 text NOT NULL, moi2 text NOT NULL, k_int integer, k_float double precision, k_string text, k_bool boolean, PRIMARY KEY(time, moi1, moi2))|}
+    query;
+  assert_equal
+    ~printer:(string_of_list string_of_key_field_type)
+    (let open Db_writer.Internal in
+     [("k_bool", FT_Boolean);
+      ("k_float", FT_Float);
+      ("k_int", FT_Int);
+      ("k_string", FT_String);
+      ("moi1", FT_String);
+      ("moi2", FT_String);
+      ("time", FT_Timestamptz);
+     ])
+    (table_info.fields |> Db_writer.Internal.FieldMap.to_seq |> List.of_seq |> List.sort compare)
+
+let testCreateTableJson ctx =
+  let schema = {|
+CREATE TABLE meas(time timestamptz NOT NULL,
+                  moi1 text NOT NULL DEFAULT(''),
+                  moi2 text NOT NULL DEFAULT(''));
+CREATE UNIQUE INDEX meas_time_idx ON meas(time, moi1, moi2);
+|} in
+  let make_config db_spec =
+    { Db_writer.db_spec = Lazy.force db_spec;
+      time_column = "time";
+      tags_column = Some "tags";
+      fields_column = Some "fields"; }
+  in
+  Test_utils.with_db_writer ~make_config ctx ~schema @@ fun { db; _ } ->
+  let db = Lazy.force db in
+  let meas =
+    Lexer.make_measurement
+      ~measurement:"meas"
+      ~tags:[("moi1", "");("moi2", "2")]
+      ~fields:[("k_int", Lexer.Int 42L);
+               ("k_float", Lexer.FloatNum 42.0);
+               ("k_string", Lexer.String "42");
+               ("k_bool", Lexer.Boolean true);]
+      ~time:(Some 1590329952000000000L)
+  in
+  let (query, table_info) = Db_writer.Internal.make_table_query db meas in
+  assert_equal ~printer:identity
+    {|CREATE TABLE meas (time timestamptz NOT NULL, tags jsonb NOT NULL, fields jsonb, PRIMARY KEY(time, tags))|}
+    query;
+  assert_equal
+    ~printer:(string_of_list string_of_key_field_type)
+    (let open Db_writer.Internal in
+     [("fields", FT_Jsonb);
+      ("tags", FT_Jsonb);
+      ("time", FT_Timestamptz);
+     ])
+    (table_info.fields |> Db_writer.Internal.FieldMap.to_seq |> List.of_seq |> List.sort compare)
+
 let testInsertNoTime ctx =
   let schema = {|
 CREATE TABLE meas(time timestamptz NOT NULL, moi1 TEXT NOT NULL DEFAULT(''), moi2 TEXT NOT NULL DEFAULT(''));
@@ -317,6 +397,8 @@ let suite = "Db_writer" >::: [
   "testInsertNoTime" >:: testInsertNoTime;
   "testInsertJsonTags" >:: testInsertJsonTags;
   "testInsertJsonFields" >:: testInsertJsonFields;
+  "testCreateTable" >:: testCreateTable;
+  "testCreateTableJson" >:: testCreateTableJson;
   "testWrite" >:: testWrite;
   "testWriteNoTime" >:: testWriteNoTime;
   "testWriteJsonTags" >:: testWriteJsonTags;
