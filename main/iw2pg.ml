@@ -87,6 +87,7 @@ let server prog_config =
 let iw2pg prog_config = ignore (Lwt_main.run (server prog_config))
 
 let main () =
+  let _ = Hashtbl.randomize () in
   let open Cmdliner in
   let open Cmdargs in
   let wrap_to_prog_config listen_port config_file =
