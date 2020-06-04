@@ -22,6 +22,7 @@ let _testDump _ctx =
           db_port = 4242;
           db_user = "asdf";
           db_password = "plop";
+          create_table = None;
           time_column = None;
           tags_jsonb_column = None;
           tag_columns = None;

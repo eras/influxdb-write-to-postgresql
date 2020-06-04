@@ -65,10 +65,10 @@ CREATE UNIQUE INDEX meas_time_idx ON meas(time, moi1, moi2);
                ("k_bool", Lexer.Boolean true);]
       ~time:(Some 1590329952000000000L)
   in
-  let { Db_writer.Internal.md_command = query; md_table_info = table_info } =
+  let { Db_writer.Internal.md_command = query; md_table_info = table_info; _ } =
     Db_writer.Internal.make_table_command db meas in
   assert_equal ~printer:identity
-    {|CREATE TABLE meas (time timestamptz NOT NULL, moi1 text NOT NULL, moi2 text NOT NULL, k_int integer, k_float double precision, k_string text, k_bool boolean, PRIMARY KEY(time, moi1, moi2))|}
+    {|CREATE TABLE meas (time timestamptz NOT NULL, moi1 text NOT NULL DEFAULT(''), moi2 text NOT NULL DEFAULT(''), k_int integer, k_float double precision, k_string text, k_bool boolean, PRIMARY KEY(time, moi1, moi2))|}
     query;
   assert_equal
     ~printer:(string_of_list string_of_key_field_type)
@@ -94,7 +94,9 @@ CREATE UNIQUE INDEX meas_time_idx ON meas(time, moi1, moi2);
     { Db_writer.db_spec = Lazy.force db_spec;
       time_column = "time";
       tags_column = Some "tags";
-      fields_column = Some "fields"; }
+      fields_column = Some "fields";
+      create_table = None;
+    }
   in
   Test_utils.with_db_writer ~make_config ctx ~schema @@ fun { db; _ } ->
   let db = Lazy.force db in
@@ -108,10 +110,10 @@ CREATE UNIQUE INDEX meas_time_idx ON meas(time, moi1, moi2);
                ("k_bool", Lexer.Boolean true);]
       ~time:(Some 1590329952000000000L)
   in
-  let { Db_writer.Internal.md_command = query; md_table_info = table_info } =
+  let { Db_writer.Internal.md_command = query; md_table_info = table_info; _ } =
     Db_writer.Internal.make_table_command db meas in
   assert_equal ~printer:identity
-    {|CREATE TABLE meas (time timestamptz NOT NULL, tags jsonb NOT NULL, fields jsonb, PRIMARY KEY(time, tags))|}
+    {|CREATE TABLE meas (time timestamptz NOT NULL, tags jsonb NOT NULL DEFAULT('{}'), fields jsonb, PRIMARY KEY(time, tags))|}
     query;
   assert_equal
     ~printer:(string_of_list string_of_key_field_type)
@@ -154,7 +156,9 @@ CREATE UNIQUE INDEX meas_time_idx ON meas(time, tags);
     { Db_writer.db_spec = Lazy.force db_spec;
       time_column = "time";
       tags_column = Some "tags";
-      fields_column = None; }
+      fields_column = None;
+      create_table = None;
+    }
   in
   Test_utils.with_db_writer ~make_config ctx ~schema @@ fun { db; _ } ->
   let db = Lazy.force db in
@@ -182,7 +186,9 @@ CREATE UNIQUE INDEX meas_time_idx ON meas(time, moi1, moi2);
     { Db_writer.db_spec = Lazy.force db_spec;
       time_column = "time";
       tags_column = None;
-      fields_column = Some "fields"; }
+      fields_column = Some "fields";
+      create_table = None;
+    }
   in
   Test_utils.with_db_writer ~make_config ctx ~schema @@ fun { db; _ } ->
   let db = Lazy.force db in
@@ -201,12 +207,8 @@ DO UPDATE SET fields=meas.fields||excluded.fields|} (fst query);
   assert_equal ~printer:(fun x -> Array.to_list x |> String.concat ",") [|"1590329952"; "1"; "2"; {|{"value":42}|}|]
     (snd query)
 
-let testWrite ctx =
-  let schema = {|
-CREATE TABLE meas(time timestamptz NOT NULL, moi1 TEXT NOT NULL DEFAULT(''), moi2 TEXT NOT NULL DEFAULT(''));
-CREATE UNIQUE INDEX meas_time_idx ON meas(time, moi1, moi2);
-|} in
-  Test_utils.with_db_writer ctx ~schema @@ fun { db; db_spec } ->
+let testWriteBase ?(duplicate_write=false) ?json_tags ?json_fields ?make_config ?schema ctx =
+  Test_utils.with_db_writer ?make_config ctx ?schema @@ fun { db; db_spec } ->
   let db = Lazy.force db in
   let meas =
     Lexer.make_measurement
@@ -217,8 +219,19 @@ CREATE UNIQUE INDEX meas_time_idx ON meas(time, moi1, moi2);
   in
   (try
      ignore (Db_writer.write db [meas]);
+     if duplicate_write then ignore (Db_writer.write db [meas]);
      let direct = Db_writer.Internal.new_pg_connection (Lazy.force db_spec) in
-     let result = direct#exec ~expect:[Postgresql.Tuples_ok] "SELECT extract(epoch from time), moi1, moi2, value FROM meas" in
+     let tags =
+       match json_tags with
+       | None -> "moi1, moi2"
+       | Some tags -> tags ^ "->>'moi1', " ^ tags ^ "->>'moi2'"
+     in
+     let fields =
+       match json_fields with
+       | None -> "value"
+       | Some fields -> fields ^ "->>'value'"
+     in
+     let result = direct#exec ~expect:[Postgresql.Tuples_ok] ("SELECT extract(epoch from time), " ^ tags ^ ", " ^ fields ^ " FROM meas") in
      match result#get_all_lst with
      | [[time; moi1; moi2; value]] ->
        let time = float_of_string time in
@@ -232,18 +245,95 @@ CREATE UNIQUE INDEX meas_time_idx ON meas(time, moi1, moi2);
    | Db_writer.Error error ->
      Printf.ksprintf assert_failure "Db_writer error: %s" (Db_writer.string_of_error error))
 
-let testWriteMulti ctx =
+let testWrite ctx =
   let schema = {|
 CREATE TABLE meas(time timestamptz NOT NULL, moi1 TEXT NOT NULL DEFAULT(''), moi2 TEXT NOT NULL DEFAULT(''));
 CREATE UNIQUE INDEX meas_time_idx ON meas(time, moi1, moi2);
 |} in
-  Test_utils.with_db_writer ctx ~schema @@ fun { db; db_spec } ->
+  testWriteBase ~schema ctx;
+  testWriteBase ~schema ~duplicate_write:true ctx
+
+let testWriteCreateTable1 ctx =
+  let schema = None in
+  let expected_exn =
+    (* hackish? *)
+    OUnitTest.OUnit_failure("Db_writer error: Cannot create value meas because creation of new tables not enabled")
+  in
+  assert_raises expected_exn (fun () -> testWriteBase ?schema ctx)
+
+let testWriteCreateTable2 ctx =
+  let schema = None in
+  let make_config db_spec =
+    { Db_writer.db_spec = Lazy.force db_spec;
+      time_column = "time";
+      tags_column = None;
+      fields_column = None;
+      create_table =
+        let open Config in
+        Some {
+          regexp = Config.regexp ".*";
+          method_ = CreateTable;
+        }
+    }
+  in
+  testWriteBase ~make_config ?schema ctx;
+  testWriteBase ~make_config ?schema ~duplicate_write:true ctx
+
+let testWriteCreateTable3 ctx =
+  let schema = None in
+  let make_config db_spec =
+    { Db_writer.db_spec = Lazy.force db_spec;
+      time_column = "time";
+      tags_column = Some "tags";
+      fields_column = None;
+      create_table =
+        let open Config in
+        Some {
+          regexp = Config.regexp ".*";
+          method_ = CreateTable;
+        }
+    }
+  in
+  testWriteBase ~make_config ~json_tags:"tags" ?schema ctx;
+  testWriteBase ~make_config ~json_tags:"tags" ?schema ~duplicate_write:true ctx
+
+let testWriteCreateTable4 ctx =
+  let schema = None in
+  let make_config db_spec =
+    { Db_writer.db_spec = Lazy.force db_spec;
+      time_column = "time";
+      tags_column = Some "tags";
+      fields_column = Some "fields";
+      create_table =
+        let open Config in
+        Some {
+          regexp = Config.regexp ".*";
+          method_ = CreateTable;
+        }
+    }
+  in
+  testWriteBase ~make_config ~json_tags:"tags" ~json_fields:"fields" ?schema ctx;
+  testWriteBase ~make_config ~json_tags:"tags" ~json_fields:"fields" ?schema ~duplicate_write:true ctx
+
+let testWriteMultiBase ?json_tags ?json_fields ?make_config ?schema ctx =
+  Test_utils.with_db_writer ?make_config ctx ?schema @@ fun { db; db_spec } ->
   let db = Lazy.force db in
   let test_sequence label input all_reference_content =
     (try
        ignore (Db_writer.write db input);
        let direct = Db_writer.Internal.new_pg_connection (Lazy.force db_spec) in
-       let result = direct#exec ~expect:[Postgresql.Tuples_ok] "SELECT extract(epoch from time), moi1, moi2, value FROM meas" in
+       let tags =
+         match json_tags with
+         | None -> "moi1, moi2"
+         | Some tags -> tags ^ "->>'moi1', " ^ tags ^ "->>'moi2'"
+       in
+       let fields =
+         match json_fields with
+         | None -> "value"
+         | Some fields -> fields ^ "->>'value'"
+       in
+       let query = "SELECT extract(epoch from time), " ^ tags ^ ", " ^ fields ^ " FROM meas" in
+       let result = direct#exec ~expect:[Postgresql.Tuples_ok] query in
        assert_equal ~printer:string_of_int (List.length all_reference_content) (List.length result#get_all_lst);
        List.combine (List.sort compare result#get_all_lst) (List.sort compare all_reference_content) |> List.iter @@ function
        | ([time; moi1; moi2; value], (time', moi1', moi2', value')) ->
@@ -282,9 +372,67 @@ CREATE UNIQUE INDEX meas_time_idx ON meas(time, moi1, moi2);
        ~fields:[("value", Lexer.Int 44L)]
        ~time:(Some 1590329952000000000L)]
     [(1590329952.0, "1", "2", "42");
-     (1590329952.0, "1", "", "44");
-     (1590329952.0, "", "2", "43");
+     (1590329952.0, "1", "",  "43");
+     (1590329952.0, "",  "2", "44");
     ]
+
+let testWriteMulti1 ctx =
+  let schema = {|
+CREATE TABLE meas(time timestamptz NOT NULL, moi1 TEXT NOT NULL DEFAULT(''), moi2 TEXT NOT NULL DEFAULT(''));
+CREATE UNIQUE INDEX meas_time_idx ON meas(time, moi1, moi2);
+|} in
+  testWriteMultiBase ~schema ctx
+
+let testWriteMulti2 ctx =
+  let schema = None in
+  let make_config db_spec =
+    { Db_writer.db_spec = Lazy.force db_spec;
+      time_column = "time";
+      tags_column = None;
+      fields_column = None;
+      create_table =
+        let open Config in
+        Some {
+          regexp = Config.regexp ".*";
+          method_ = CreateTable;
+        }
+    }
+  in
+  testWriteMultiBase ~make_config ?schema ctx
+
+let testWriteMulti3 ctx =
+  let schema = None in
+  let make_config db_spec =
+    { Db_writer.db_spec = Lazy.force db_spec;
+      time_column = "time";
+      tags_column = Some "tags";
+      fields_column = None;
+      create_table =
+        let open Config in
+        Some {
+          regexp = Config.regexp ".*";
+          method_ = CreateTable;
+        }
+    }
+  in
+  testWriteMultiBase ~make_config ~json_tags:"tags" ?schema ctx
+
+let testWriteMulti4 ctx =
+  let schema = None in
+  let make_config db_spec =
+    { Db_writer.db_spec = Lazy.force db_spec;
+      time_column = "time";
+      tags_column = Some "tags";
+      fields_column = Some "fields";
+      create_table =
+        let open Config in
+        Some {
+          regexp = Config.regexp ".*";
+          method_ = CreateTable;
+        }
+    }
+  in
+  testWriteMultiBase ~make_config ~json_tags:"tags" ~json_fields:"fields" ?schema ctx
 
 let testWriteNoTime ctx =
   let schema = {|
@@ -327,7 +475,9 @@ CREATE UNIQUE INDEX meas_time_idx ON meas(time, tags);
     { Db_writer.db_spec = Lazy.force db_spec;
       time_column = "time";
       tags_column = Some "tags";
-      fields_column = None; }
+      fields_column = None;
+      create_table = None;
+    }
   in
   Test_utils.with_db_writer ~make_config ctx ~schema @@ fun { db; db_spec } ->
   let db = Lazy.force db in
@@ -364,7 +514,9 @@ CREATE UNIQUE INDEX meas_time_idx ON meas(time, moi1, moi2);
     { Db_writer.db_spec = Lazy.force db_spec;
       time_column = "time";
       tags_column = None;
-      fields_column = Some "fields"; }
+      fields_column = Some "fields";
+      create_table = None;
+    }
   in
   Test_utils.with_db_writer ~make_config ctx ~schema @@ fun { db; db_spec } ->
   let db = Lazy.force db in
@@ -402,7 +554,15 @@ let suite = "Db_writer" >::: [
   "testCreateTable" >:: testCreateTable;
   "testCreateTableJson" >:: testCreateTableJson;
   "testWrite" >:: testWrite;
+  "testWriteCreateTable1" >:: testWriteCreateTable1;
+  "testWriteCreateTable2" >:: testWriteCreateTable2;
+  "testWriteCreateTable3" >:: testWriteCreateTable3;
+  "testWriteCreateTable4" >:: testWriteCreateTable4;
   "testWriteNoTime" >:: testWriteNoTime;
   "testWriteJsonTags" >:: testWriteJsonTags;
   "testWriteWriteJsonFields" >:: testWriteWriteJsonFields;
+  "testWriteMulti1" >:: testWriteMulti1;
+  "testWriteMulti2" >:: testWriteMulti2;
+  "testWriteMulti3" >:: testWriteMulti3;
+  "testWriteMulti4" >:: testWriteMulti4;
 ]

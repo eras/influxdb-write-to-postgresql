@@ -17,12 +17,31 @@ type user = {
   expires : float option;
 }
 
+type create_table_method =
+  | CreateTable
+  | CreateHyperTable
+
+(** Keep the original regexp as string around for error reporting and
+    generating yaml/json, should we need to *)
+type regexp = private Regexp of string * Re.re
+
+(* For tests. Can throw exceptions from Re.Pcre *)
+val regexp : string -> regexp
+
+val matches : regexp -> string -> bool
+
+type create_table = {
+  regexp: regexp;
+  method_: create_table_method
+}
+
 type database = {
   db_name : string;
   db_host : string;
   db_port : int;
   db_user : string;
   db_password : string;
+  create_table : create_table option; (* allow to CREATE tables matching this regular expression *)
   time_column : string option;
   tags_jsonb_column : string option;
   tag_columns : string list option;

@@ -34,6 +34,42 @@ type user = {
   expires: (float option [@default None]);
 } [@@deriving yojson]
 
+type create_table_method =
+  | CreateTable
+  | CreateHyperTable
+[@@deriving yojson]
+
+type regexp = Regexp of string * Re.re
+
+let matches : regexp -> string -> bool =
+  fun (Regexp (_, re)) str ->
+  Re.exec_opt re str <> None
+
+let regexp str = Regexp (str, Re.Perl.re str |> Re.compile)
+
+let regexp_of_yojson =
+  let rere = Re.Perl.re "^/(.*)/$" |> Re.compile in
+  fun (yojson: Yojson.Safe.t) ->
+  match yojson with
+    | `String str -> begin
+        match Re.exec_opt rere str with
+        | None -> Stdlib.Error "Expect regexp of form /regexp/"
+        | Some group ->
+          let groups = Re.Group.all group in
+          try Ok (Regexp (str, Re.Perl.re groups.(1) |> Re.compile))
+          with
+          | Re.Perl.Parse_error -> Stdlib.Error "Failed to parse regexp"
+          | Re.Perl.Not_supported -> Stdlib.Error "Regexp feature not supported"
+      end
+  | _ -> Stdlib.Error "Expected regexp"
+
+let regexp_to_yojson (Regexp (original, _)) = `String original
+
+type create_table = {
+  regexp: regexp;
+  method_: (create_table_method [@key "method"])
+} [@@deriving yojson]
+
 type database = {
   db_name: string;
 
@@ -42,6 +78,8 @@ type database = {
 
   db_user: string;
   db_password: string;
+
+  create_table: (create_table option [@default None]);
 
   time_column: (string option [@default None]);
   tags_jsonb_column: (string option [@default None]);

@@ -16,6 +16,7 @@ type db_spec =
 
 type config = {
   db_spec : db_spec;
+  create_table : Config.create_table option;
   time_column : string;
   tags_column: string option;   (* using tags column? then this is its name *)
   fields_column: string option;   (* using fields column? then this is its name *)
@@ -23,8 +24,8 @@ type config = {
 
 module Internal0 =
 struct
-  module FieldMap = Map.Make(struct type t = string let compare = compare end)
-  module TableMap = Map.Make(struct type t = string let compare = compare end)
+  module FieldMap = Map.Make(String)
+  module TableMap = Map.Make(String)
 
   type field_type =
     | FT_String
@@ -45,6 +46,7 @@ struct
     | FT_Unknown str -> str
 
   let not_null x = x ^ " NOT NULL"
+  let default value x = x ^ " DEFAULT(" ^ value ^ ")"
   let db_concat = String.concat ", "
 
   let field_type_of_db = function
@@ -84,17 +86,23 @@ type t = {
   subsecond_time_field: bool;
   config: config;
   mutable database_info: database_info;
-  indices: string list list TableMap.t;
+  mutable indices: string list list TableMap.t;
 }
 
 let create_database_info () : database_info = Hashtbl.create 10
 
 type query = string
 
+type 'a with_reason = {
+  reason: string;
+  value: 'a;
+}
+
 type error =
   | PgError of (Pg.error * query option)
   | MalformedUTF8
   | CannotAddTags of string list
+  | CannotCreateTable of string with_reason
   | NoPrimaryIndexFound of string
 
 exception Error of error
@@ -317,6 +325,7 @@ struct
   type made_table = {
     md_command : string;
     md_table_info : table_info;
+    md_update_pks : string list list TableMap.t -> string list list TableMap.t;
   }
 
   let make_table_command (t : t) (measurement : Lexer.measurement) : made_table =
@@ -334,7 +343,22 @@ struct
        | None -> (db_tags_and_types measurement)
        | Some tags -> [(tags, FT_Jsonb)])
     in
-    let db_pk_columns = pk_columns |> List.map dbify |>  Common.map_snd not_null in
+    let db_pk_columns =
+      let identity x = x in
+      let map2_zip f g x = (f x, g x) in
+      let snd_lens f (a, b) = (a, f b) in
+      pk_columns |> List.map (map2_zip identity dbify) |>
+      List.map (snd_lens (snd_lens not_null)) |>
+      Common.map_rest
+        snd
+        (fun ((_name, field_type), (db_name, db_type)) ->
+           (db_name, default (
+               match field_type with
+               | FT_Jsonb -> "'{}'"
+               | FT_String -> "''"
+               | ft -> failwith ("Unexpected field type " ^ db_of_field_type ft)
+             ) db_type)
+        ) in
     let join (a, b) = a ^ " " ^ b in
     let command =
       "CREATE TABLE " ^ db_of_identifier table_name ^
@@ -343,7 +367,8 @@ struct
     in
     let table_info = { fields = (pk_columns @ field_columns) |> List.to_seq |> FieldMap.of_seq } in
     { md_command = command;
-      md_table_info = table_info }
+      md_table_info = table_info;
+      md_update_pks = TableMap.add table_name [pk_columns |> List.map fst] }
 end
 
 open Internal
@@ -395,6 +420,7 @@ let string_of_error error =
   | PgError (error, Some query) -> Pg.string_of_error error ^ " for " ^ query
   | MalformedUTF8 -> "Malformed UTF8"
   | CannotAddTags tags -> "Cannot add tags " ^ db_concat (List.map db_of_identifier tags)
+  | CannotCreateTable { reason; value } -> "Cannot create value " ^ db_of_identifier value ^ " because " ^ reason
   | NoPrimaryIndexFound table -> "No primary index found for table " ^ table
 
 let _ = Printexc.register_printer (function
@@ -445,9 +471,30 @@ let check_and_update_tables (t : t) (measurement : Lexer.measurement) =
   if Hashtbl.mem t.database_info table_name then
     ()
   else
-    let made_table = make_table_command t measurement in
-    Hashtbl.add t.database_info table_name made_table.md_table_info;
-    ignore (t.db#exec ~expect:[Pg.Command_ok] made_table.md_query)
+    let make_table () =
+      let made_table = make_table_command t measurement in
+      ignore (t.db#exec ~expect:[Pg.Command_ok] made_table.md_command);
+      t.indices <- made_table.md_update_pks t.indices;
+      Hashtbl.add t.database_info table_name made_table.md_table_info
+    in
+    let make_hypertable () =
+      let command = "SELECT create_hypertable(?, ?)" in
+      let params = [|table_name; t.config.time_column|] in
+      ignore (t.db#exec ~expect:[Pg.Tuples_ok] ~params command)
+    in
+    match t.config.create_table with
+    | Some create_table when Config.matches create_table.regexp table_name -> begin
+        match create_table.method_ with
+        | Config.CreateTable ->
+          make_table ()
+        | Config.CreateHyperTable ->
+          make_table ();
+          make_hypertable ()
+      end
+    | None -> raise (Error (CannotCreateTable { value = table_name;
+                                                reason = "creation of new tables not enabled" }))
+    | Some _ -> raise (Error (CannotCreateTable { value = table_name;
+                                                  reason = "table does not match the regexp" }))
 
 let write t (measurements: Lexer.measurement list) =
   try
@@ -455,10 +502,10 @@ let write t (measurements: Lexer.measurement list) =
     (* TODO: group requests by their parameters and use multi-value inserts *)
     List.iter (
       fun measurement -> 
+        let () = check_and_update_tables t measurement in
         let (query, params) = insert_of_measurement t measurement in
         let field_types = db_fields_and_types measurement in
         let tag_types = db_tags_and_types measurement in
-        let () = check_and_update_tables t measurement in
         let () = check_and_update_columns ~kind:`Tags t measurement.measurement tag_types in
         let () = check_and_update_columns ~kind:`Fields t measurement.measurement field_types in
         try

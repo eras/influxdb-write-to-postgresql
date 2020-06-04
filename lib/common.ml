@@ -67,6 +67,12 @@ let db_of_identifier str =
 let map_fst f = List.map (fun (k, v) -> (f k, v))
 let map_snd f = List.map (fun (k, v) -> (k, f v))
 
+(* Map the first and the other elements with separate functions *)
+let map_rest first_f rest_f xs =
+  match xs with
+  | [] -> []
+  | x::xs -> first_f x::List.map rest_f xs
+
 (* Samy but work with any mapping (ie. any container or Seq) *)
 let map_fst' map f = map (fun (k, v) -> (f k, v))
 let map_snd' map f = map (fun (k, v) -> (k, f v))

@@ -4,10 +4,15 @@ type quote_mode = QuoteAlways
 
 type t
 type query = string
+type 'a with_reason = {
+  reason: string;
+  value: 'a;
+}
 type error =
   | PgError of (Pg.error * query option)
   | MalformedUTF8
   | CannotAddTags of string list
+  | CannotCreateTable of string with_reason
   | NoPrimaryIndexFound of string
 
 exception Error of error
@@ -26,6 +31,7 @@ type db_spec =
 
 type config = {
   db_spec : db_spec;
+  create_table : Config.create_table option;
   time_column : string;
   tags_column: string option;   (* using tags column? then this is its name *)
   fields_column: string option;   (* using fields column? then this is its name *)
@@ -56,6 +62,7 @@ val db_config_of_database : Config.database -> config
 (** exposed for unit testing *)
 module Internal: sig
   module FieldMap: Map.S with type key = string
+  module TableMap: Map.S with type key = string
 
   type field_type =
     | FT_String
@@ -78,6 +85,7 @@ module Internal: sig
   type made_table = {
     md_command : string;
     md_table_info : table_info;
+    md_update_pks : string list list TableMap.t -> string list list TableMap.t;
   }
   val make_table_command : t -> Lexer.measurement -> made_table
 end
