@@ -82,7 +82,7 @@ let parse_ports (ports_json : json) =
 let create_db_container () : container_info =
   let run_channel =
     let args = "-c fsync=off -c full_page_writes=off" in
-    let command = "docker run --rm -e POSTGRES_PASSWORD=test -p 5432 -d postgres:11 " ^ args in
+    let command = "docker run --rm -e POSTGRES_PASSWORD=test -p 5432 -d timescale/timescaledb:latest-pg11 " ^ args in
     Unix.open_process_in command in
   let ci_id = input_line run_channel in
   OUnit2.assert_equal (Unix.close_process_in run_channel) (Unix.WEXITED 0);
