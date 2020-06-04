@@ -348,6 +348,25 @@ end
 
 open Internal
 
+let db_spec_of_database : Config.database -> db_spec =
+  fun { db_name; db_host; db_port; db_user; db_password; _ } ->
+  DbInfo {
+    db_host;
+    db_port;
+    db_user;
+    db_password;
+    db_name;
+  }
+
+let db_config_of_database : Config.database -> config =
+  fun ({ Config.time_column; tags_jsonb_column; fields_jsonb_column; create_table; _ } as database) ->
+  let db_spec = db_spec_of_database database in
+  { db_spec;
+    time_column = Option.value time_column ~default:"time";
+    tags_column = tags_jsonb_column;
+    fields_column = fields_jsonb_column;
+    create_table; }
+
 let create (config : config) =
   try
     let db = new_pg_connection config.db_spec in

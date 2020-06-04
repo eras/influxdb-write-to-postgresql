@@ -52,24 +52,6 @@ type database = {
   field_columns: (string list option [@default None]);
 } [@@deriving yojson]
 
-let db_spec_of_database : database -> Db_writer.db_spec =
-  fun { db_name; db_host; db_port; db_user; db_password; _ } ->
-  Db_writer.DbInfo {
-    Db_writer.db_host;
-    db_port;
-    db_user;
-    db_password;
-    db_name;
-  }
-
-let db_config_of_database : database -> Db_writer.config =
-  fun ({ time_column; tags_jsonb_column; fields_jsonb_column; _ } as database) ->
-  let db_spec = db_spec_of_database database in
-  { Db_writer.db_spec;
-    time_column = Option.value time_column ~default:"time";
-    tags_column = tags_jsonb_column;
-    fields_column = fields_jsonb_column; }
-
 let associative_of_yojson
     (of_yojson: Yojson.Safe.t -> ('result, string) result)
     (xs: Yojson.Safe.t) :

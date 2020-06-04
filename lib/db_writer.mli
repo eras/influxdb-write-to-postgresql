@@ -48,6 +48,11 @@ val reconnect : t -> unit
     Can raise PgError *)
 val write : t -> Lexer.measurement list -> unit
 
+val db_spec_of_database : Config.database -> db_spec
+
+val db_config_of_database : Config.database -> config
+
+
 (** exposed for unit testing *)
 module Internal: sig
   module FieldMap: Map.S with type key = string

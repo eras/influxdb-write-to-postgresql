@@ -36,7 +36,7 @@ let handle_request body db =
 let server prog_config =
   let config = Config.load prog_config.config_file in
   let databases =
-    config.databases |> Common.map_snd Config.db_config_of_database
+    config.databases |> Common.map_snd Db_writer.db_config_of_database
   in
   let _users =
     if config.users <> [] then
