@@ -65,7 +65,8 @@ CREATE UNIQUE INDEX meas_time_idx ON meas(time, moi1, moi2);
                ("k_bool", Lexer.Boolean true);]
       ~time:(Some 1590329952000000000L)
   in
-  let (query, table_info) = Db_writer.Internal.make_table_query db meas in
+  let { Db_writer.Internal.md_command = query; md_table_info = table_info } =
+    Db_writer.Internal.make_table_command db meas in
   assert_equal ~printer:identity
     {|CREATE TABLE meas (time timestamptz NOT NULL, moi1 text NOT NULL, moi2 text NOT NULL, k_int integer, k_float double precision, k_string text, k_bool boolean, PRIMARY KEY(time, moi1, moi2))|}
     query;
@@ -107,7 +108,8 @@ CREATE UNIQUE INDEX meas_time_idx ON meas(time, moi1, moi2);
                ("k_bool", Lexer.Boolean true);]
       ~time:(Some 1590329952000000000L)
   in
-  let (query, table_info) = Db_writer.Internal.make_table_query db meas in
+  let { Db_writer.Internal.md_command = query; md_table_info = table_info } =
+    Db_writer.Internal.make_table_command db meas in
   assert_equal ~printer:identity
     {|CREATE TABLE meas (time timestamptz NOT NULL, tags jsonb NOT NULL, fields jsonb, PRIMARY KEY(time, tags))|}
     query;

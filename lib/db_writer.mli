@@ -69,5 +69,10 @@ module Internal: sig
   val db_of_identifier : string -> string
   val db_of_field_type : field_type -> string
   val insert_of_measurement : t -> Lexer.measurement -> string * string array
-  val make_table_query : t -> Lexer.measurement -> string * table_info
+
+  type made_table = {
+    md_command : string;
+    md_table_info : table_info;
+  }
+  val make_table_command : t -> Lexer.measurement -> made_table
 end

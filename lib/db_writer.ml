@@ -314,7 +314,12 @@ struct
   let db_tags_and_types (measurement : Lexer.measurement) =
     List.map (fun (name, _) -> (name, FT_String)) measurement.tags
 
-  let make_table_query (t : t) (measurement : Lexer.measurement) : string * table_info =
+  type made_table = {
+    md_command : string;
+    md_table_info : table_info;
+  }
+
+  let make_table_command (t : t) (measurement : Lexer.measurement) : made_table =
     let table_name = measurement.measurement in
     let dbify (name, type_) = (db_of_identifier name, db_of_field_type type_) in
     let field_columns =
@@ -331,13 +336,14 @@ struct
     in
     let db_pk_columns = pk_columns |> List.map dbify |>  Common.map_snd not_null in
     let join (a, b) = a ^ " " ^ b in
-    let query =
+    let command =
       "CREATE TABLE " ^ db_of_identifier table_name ^
       " (" ^ db_concat (((db_pk_columns @ db_field_columns) |> List.map join) @
                           ["PRIMARY KEY(" ^ db_concat (List.map fst db_pk_columns) ^ ")"]) ^ ")"
     in
     let table_info = { fields = (pk_columns @ field_columns) |> List.to_seq |> FieldMap.of_seq } in
-    (query, table_info)
+    { md_command = command;
+      md_table_info = table_info }
 end
 
 open Internal
@@ -420,9 +426,9 @@ let check_and_update_tables (t : t) (measurement : Lexer.measurement) =
   if Hashtbl.mem t.database_info table_name then
     ()
   else
-    let (query, table_info) = make_table_query t measurement in
-    Hashtbl.add t.database_info table_name table_info;
-    ignore (t.db#exec ~expect:[Pg.Command_ok] query)
+    let made_table = make_table_command t measurement in
+    Hashtbl.add t.database_info table_name made_table.md_table_info;
+    ignore (t.db#exec ~expect:[Pg.Command_ok] made_table.md_query)
 
 let write t (measurements: Lexer.measurement list) =
   try
