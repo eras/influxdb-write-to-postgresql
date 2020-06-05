@@ -104,7 +104,7 @@ let testParseCreateUniqueIndexWhere _ctx =
       })
     parsed
 
-let suite = "Db_spool" >::: [
+let suite = "Db_sql" >::: [
   "testLexCreateUniqueIndex" >:: testLexCreateUniqueIndex;
   "testParseCreateUniqueIndex" >:: testParseCreateUniqueIndex;
   "testParseCreateUniqueIndexFunctional" >:: testParseCreateUniqueIndexFunctional;
