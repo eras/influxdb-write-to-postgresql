@@ -16,6 +16,11 @@ type request = {
   token : string option;
 }
 
+type result =
+  | AuthSuccess
+  | AuthFailed
+
 (** [permitted] determines if user/password combination is permitted
     in the given context *)
-val permitted : t -> context:context -> request:request -> bool
+val permitted : t -> context:context -> request:request -> result
+

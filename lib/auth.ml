@@ -16,31 +16,37 @@ type request = {
   token : string option;
 }
 
+type result =
+  | AuthSuccess
+  | AuthFailed
+
 let create config =
   { config }
 
-let auth_ok (pw : Config.password) request =
+let auth_ok (_context : context) (pw : Config.password) request =
   match pw.type_, request with
-  | Plain, { user = _; password = Some password; token = None } ->
-    pw.password = password
+  | Plain, { user = _; password = Some password; token = None; } ->
+    if pw.password = password
+    then AuthSuccess
+    else AuthFailed
   | Plain, _ ->
-    false
+    AuthFailed
 
 let permitted t ~(context : context) ~(request : request) =
   let user_info = Option.map (fun user -> List.assoc_opt user t.config.users) request.user in
   match context.allowed_users, request, user_info with
-  | None, { user = None; password = None; token = None }, _ ->
+  | None, { user = None; password = None; token = None; }, _ ->
     (* If no authentication is provided and not configured, permit *)
-    true
+    AuthSuccess
   | None, _, _ ->
     (* If authentication is provided but not configured, reject *)
-    true
+    AuthSuccess
   | Some allowed_users,
     ({ user = Some user; _ } as request),
-    Some (Some user_info) ->
+    Some (Some user_info) when List.mem user allowed_users ->
     (* If authentication is provided and configured, then does it
        match? *)
-    List.mem user allowed_users && auth_ok user_info.password request
+    auth_ok context user_info.password request
   | Some _, _, _ ->
     (* Otherwise, reject *)
-    false
+    AuthFailed
