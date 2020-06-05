@@ -10,9 +10,17 @@ val string_of_error : error -> string
 
 type group = { expires : float option; }
 
+type password_type =
+  | Plain
+
+type password = {
+  type_: password_type;
+  password: string;
+}
+
 type user = {
   token : string option;
-  password : string;
+  password : password;
   group : string option;
   expires : float option;
 }
@@ -49,10 +57,14 @@ type database = {
   field_columns : string list option;
 }
 
+type users = (string * user) list
+type regexp_users = (string * user) list
+type groups = (string * group) list
+
 type t = {
-  users : (string * user) list;
-  regexp_users : (string * user) list;
-  groups : (string * group) list;
+  users : users;
+  regexp_users : regexp_users;
+  groups : groups;
   databases : (string * database) list;
   regexp_databases : (string * database) list;
 }

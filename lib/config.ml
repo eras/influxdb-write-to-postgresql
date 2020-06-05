@@ -27,9 +27,24 @@ type group = {
   expires: (float option [@default None]);
 } [@@deriving yojson]
 
+type password_type =
+  | Plain
+
+let password_type_of_yojson = function
+  | `String "plain" -> Ok Plain
+  | _ -> Stdlib.Error "Invalid password type"
+
+let password_type_to_yojson = function
+  | Plain -> `String "plain"
+
+type password = {
+  type_: password_type [@key "type"];
+  password: string;
+} [@@deriving yojson]
+
 type user = {
   token: (string option [@default None]);
-  password: string;
+  password: password;
   group: (string option [@default None]);
   expires: (float option [@default None]);
 } [@@deriving yojson]
@@ -125,11 +140,20 @@ let list_or_empty_of_yojson of_yojson yojson =
     | Ok x -> Ok x
     | Error x -> Error x
 
-type t = {
-  users : (string * user) list [@default []] [@of_yojson (associative_of_yojson user_of_yojson)];
-  regexp_users : ((string * user) list[@default []]  [@of_yojson (list_or_empty_of_yojson (associative_of_yojson user_of_yojson))]);
+type users = (string * user) list [@@deriving yojson]
+let users_of_yojson = associative_of_yojson user_of_yojson
 
-  groups: ((string * group) list [@default []] [@of_yojson (list_or_empty_of_yojson (associative_of_yojson group_of_yojson))]);
+type regexp_users = (string * user) list [@@deriving yojson]
+let regexp_users_of_yojson = associative_of_yojson user_of_yojson
+
+type groups = (string * group) list [@@deriving yojson]
+let groups_of_yojson = list_or_empty_of_yojson (associative_of_yojson group_of_yojson)
+
+type t = {
+  users : users [@default []];
+  regexp_users : regexp_users [@default []];
+
+  groups: groups [@default []];
 
   databases: (string * database) list [@of_yojson (associative_of_yojson database_of_yojson)];
   regexp_databases: (string * database) list [@default []] [@of_yojson (associative_of_yojson database_of_yojson)];

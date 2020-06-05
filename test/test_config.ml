@@ -6,13 +6,13 @@ let _testDump _ctx =
       users = ["test", {
           token = None;
           group = None;
-          password = "";
+          password = { type_ = Plain; password = "" };
           expires = None;
         }];
       regexp_users = [".*", {
           group = None;
           token = None;
-          password = "";
+          password = { type_ = Plain; password = "" };
           expires = None;
         }];
       groups = [];
