@@ -38,7 +38,7 @@ let testLoad _ctx =
   let _config = Config.load "config.example.yaml" in
   ()
 
-let suite = "Db_spool" >::: [
+let suite = "Db_config" >::: [
   (* "_testDump" >:: _testDump; *)
   "testLoad" >:: testLoad;
 ]
