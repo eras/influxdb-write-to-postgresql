@@ -46,32 +46,34 @@ let handle_setup { auth; config; db_spool } req =
   let db_config, db_info_or_error =
     match List.assoc "db" query with
     | [] | exception Not_found ->
-      None, fun () -> `Error "Query is missing database name"
+      Error "Missing database argument.", fun () -> `Error "Query is missing database name"
     | [db_name] -> begin
-        List.assoc_opt db_name config.databases,
+        List.assoc_opt db_name config.databases |> Option.to_result ~none:"No such database.",
         fun () ->
           match Db_spool.db db_spool db_name with
           | Some db  -> `Db (db, config)
           | _ -> `Error "Unable to get database instance"
       end
     | _ ->
-      None, fun () -> `Error "Query is giving >1 database"
+      Error "Too many such dbs", fun () -> `Error "Query is giving >1 database"
   in
   let db_info_or_error =
     let authorized =
       let header : C.Header.t = req |> Request.headers in
       match db_config with
-      | None -> Auth.AuthFailed
-      | Some db_config ->
+      | Error error ->
+        Error error
+      | Ok db_config ->
         let context = {
           Auth.allowed_users = db_config.allowed_users;
         } in
         (* this also handles the case of allowed_users = None *)
-        Auth.permitted_header auth ~context ~header
+        Ok (Auth.permitted_header auth ~context ~header)
     in
     match authorized with
-    | Auth.AuthSuccess -> db_info_or_error
-    | Auth.AuthFailed -> fun () -> `AuthError
+    | Ok Auth.AuthSuccess -> db_info_or_error
+    | Ok _ -> fun () -> `AuthError ""
+    | Error db_error -> fun () -> `AuthError db_error
   in
   db_info_or_error
 
@@ -105,10 +107,10 @@ let server prog_config =
          (fun () -> handle_request body db)
          (fun () -> db_info.Db_spool.release (); return ())
      | `Error error -> return (`OK, None, error)
-     | `AuthError ->
+     | `AuthError error ->
        let header = Cohttp.Header.init () in
        let header = Cohttp.Header.add header "WWW-Authenticate" ("Basic realm=\"" ^ config.realm ^"\"") in
-       return (`Unauthorized, Some header, "unauthorized")
+       return (`Unauthorized, Some header, "Unauthorized. " ^ error)
     )
     >>= fun (status, headers, body) ->
     Server.respond_string ~status ~body () >>= fun (response, body) ->
