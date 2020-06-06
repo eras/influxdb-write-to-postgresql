@@ -23,7 +23,10 @@ let _testDump _ctx =
           db_user = "asdf";
           db_password = "plop";
           allowed_users = None;
-          create_table = None;
+          create_table = Some {
+            regexp = regexp ".*";
+            method_ = CreateTable;
+          };
           time_column = None;
           tags_jsonb_column = None;
           tag_columns = None;
