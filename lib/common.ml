@@ -76,3 +76,16 @@ let map_rest first_f rest_f xs =
 (* Samy but work with any mapping (ie. any container or Seq) *)
 let map_fst' map f = map (fun (k, v) -> (f k, v))
 let map_snd' map f = map (fun (k, v) -> (k, f v))
+
+let rec yaml_of_yojson : _ -> Yaml.value = function
+  | `Null -> `Null
+  | `Bool x -> `Bool x
+  | `Float x -> `Float x
+  | `String x -> `String x
+  | `Assoc kv -> `O (map_snd yaml_of_yojson kv)
+  | `List xs -> `A (List.map yaml_of_yojson xs)
+  | `Int x -> `Float (float_of_int x)
+  | `Intlit x -> `Float (float_of_string x)
+  | `Tuple _ -> failwith "Tuple->Yaml conversion not supported"
+  | `Variant _ -> failwith "Variant->Yaml conversion not supported"
+

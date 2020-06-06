@@ -177,20 +177,8 @@ let rec yojson_of_yaml : Yaml.value -> _ = function
   | `O kv -> `Assoc (Common.map_snd yojson_of_yaml kv)
   | `A xs -> `List (List.map yojson_of_yaml xs)
 
-let rec yaml_of_yojson : _ -> Yaml.value = function
-  | `Null -> `Null
-  | `Bool x -> `Bool x
-  | `Float x -> `Float x
-  | `String x -> `String x
-  | `Assoc kv -> `O (Common.map_snd yaml_of_yojson kv)
-  | `List xs -> `A (List.map yaml_of_yojson xs)
-  | `Int x -> `Float (float_of_int x)
-  | `Intlit x -> `Float (float_of_string x)
-  | `Tuple _ -> failwith "Tuple->Yaml conversion not supported"
-  | `Variant _ -> failwith "Variant->Yaml conversion not supported"
-
 let dump t =
-  let yaml = to_yojson t |> yaml_of_yojson in
+  let yaml = to_yojson t |> Common.yaml_of_yojson in
   match Yaml.to_string yaml with
   | Ok str -> output_string stdout str
   | Error (`Msg message) -> raise (Error (CannotProcessConfig message))
