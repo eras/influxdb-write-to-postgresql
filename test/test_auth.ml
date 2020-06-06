@@ -33,7 +33,7 @@ let case ~user ~password ~token ~expect auth_request =
       token = token;
     }
   in
-  let msg = Printf.sprintf "Grep for: %s, %s, %s -> %s" msg_user msg_password msg_token msg_expect in
+  let msg = Printf.sprintf "Grep for:\n%s, %s, %s -> %s" msg_user msg_password msg_token msg_expect in
   let result =
     try Ok (auth_request ~request)
     with Auth.Error error -> Error error
@@ -73,15 +73,37 @@ let user_password_driver auth_request =
   let token = `MissingToken in
   case ~user ~password ~token ~expect auth_request
 
+let no_auth_driver auth_request =
+  flip List.iter [`MissingUser; `IncorrectUser; `CorrectUser] @@ fun user ->
+  flip List.iter [`MissingPassword; `IncorrectPassword; `CorrectPassword] @@ fun password ->
+  (* writing this way helps the compiler test all cases in a searchable manner :-o *)
+  let expect = match user, password, `MissingToken with
+    | `IncorrectUser, `IncorrectPassword, `MissingToken -> Ok Auth.AuthFailed
+    | `IncorrectUser, `CorrectPassword, `MissingToken -> Ok Auth.AuthFailed
+    | `CorrectUser, `IncorrectPassword, `MissingToken -> Ok Auth.AuthFailed
+    | `CorrectUser, `CorrectPassword, `MissingToken -> Ok Auth.AuthFailed
+    | `MissingUser, `IncorrectPassword, `MissingToken -> Ok Auth.AuthFailed
+    | `MissingUser, `CorrectPassword, `MissingToken -> Ok Auth.AuthFailed
+    | `CorrectUser, `MissingPassword, `MissingToken -> Ok Auth.AuthFailed
+    | `IncorrectUser, `MissingPassword, `MissingToken -> Ok Auth.AuthFailed
+    | `MissingUser, `MissingPassword, `MissingToken -> Ok Auth.AuthSuccess
+  in
+  let token = `MissingToken in
+  case ~user ~password ~token ~expect auth_request
+
 let testPlain _ctx =
   let auth = Auth.create user_pass_config in
   let context = { Auth.allowed_users = Some ["test1"; "test2"] } in
   user_password_driver @@ fun ~(request:Auth.request) ->
   Auth.permitted auth ~context ~request
 
-let testBasic _ctx =
-  let basic_of_request (request : Auth.request) =
-    let headers = Cohttp.Header.init () in
+let basic_of_request (request : Auth.request) =
+  let headers = Cohttp.Header.init () in
+  match request with
+  | { user = None; password = None; _; } ->
+    (* Don't even add a header in this case *)
+    headers
+  | _ ->
     let base64enc = Cryptokit.Base64.encode_compact_pad () in
     Option.iter (fun user -> base64enc#put_string user) request.user;
     base64enc#put_string ":";
@@ -89,7 +111,8 @@ let testBasic _ctx =
     base64enc#finish;
     let base64 = base64enc#get_string in
     Cohttp.Header.add headers "Authorization" (Printf.sprintf "Basic %s" base64)
-  in
+
+let testBasic _ctx =
   let auth = Auth.create user_pass_config in
   let context = { Auth.allowed_users = Some ["test1"; "test2"] } in
   user_password_driver @@ fun ~(request:Auth.request) ->
@@ -138,8 +161,16 @@ let testToken _ctx =
   let header = basic_of_request request in
   Auth.permitted_header auth ~context ~header
 
+let testNoAuth _ctx =
+  let auth = Auth.create token_config in
+  let context = { Auth.allowed_users = None } in
+  no_auth_driver @@ fun ~(request:Auth.request) ->
+  let header = basic_of_request request in
+  Auth.permitted_header auth ~context ~header
+
 let suite = "Db_auth" >::: [
   "testPlain" >:: testPlain;
   "testBasic" >:: testBasic;
   "testToken" >:: testToken;
+  "testNoAuth" >:: testNoAuth;
 ]
