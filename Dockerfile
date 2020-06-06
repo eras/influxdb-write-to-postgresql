@@ -13,6 +13,8 @@ RUN opam install -y yaml decoders-yojson
 RUN opam install -y ppx_deriving_yojson
 RUN opam install -y cmdliner
 RUN opam install -y re
+RUN sudo apt-get -y install libgmp-dev libssl-dev zlib1g-dev
+RUN opam install -y cryptokit
 
 COPY dune-project influxdb_write_to_postgresql.* /work/
 COPY main /work/main/
@@ -31,7 +33,7 @@ RUN eval $(opam env) && dune build --profile release
 #RUN apk --no-cache add libpq ca-certificates
 FROM debian:buster-slim
 
-RUN apt-get update && apt-get install -y libpq5 ca-certificates
+RUN apt-get update && apt-get install -y libpq5 ca-certificates libgmpxx4ldbl
 RUN rm -rf /var/cache/apt /var/lib/apt
 WORKDIR /app
 COPY --from=builder /work/_build/default/main/iw2pg.exe /app/iw2pg

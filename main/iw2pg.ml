@@ -8,6 +8,12 @@ type prog_config = {
   config_file: string;
 }
 
+type environment = {
+  auth : Auth.t;
+  config : Config.t;
+  db_spool : Db_spool.t;
+}
+
 let handle_request body db =
   body |> Cohttp_lwt.Body.to_string >|= fun body ->
   let rec try_write retries =
@@ -30,17 +36,53 @@ let handle_request body db =
   in
   let results = try_write 3 in
   match results with
-  | `Ok _results -> "OK"
-  | `Error error -> error
+  | `Ok _results -> (`OK, None, "OK")
+  | `Error error -> (`Internal_server_error, None, error)
+
+let handle_setup { auth; config; db_spool } req =
+  let _uri = req |> Cohttp.Request.uri |> Uri.to_string in
+  let query = req |> Cohttp.Request.uri |> Uri.query in
+  let _meth = req |> Request.meth |> Code.string_of_method in
+  (* the evaluation is postponed as this check can just all be here *)
+  let db_config, db_info_or_error =
+    match List.assoc "db" query with
+    | [] | exception Not_found ->
+      None, fun () -> `Error "Query is missing database name"
+    | [db_name] -> begin
+        List.assoc_opt db_name config.databases,
+        fun () ->
+          match Db_spool.db db_spool db_name with
+          | Some db  -> `Db (db, config)
+          | _ -> `Error "Unable to get database instance"
+      end
+    | _ ->
+      None, fun () -> `Error "Query is giving >1 database"
+  in
+  let db_info_or_error =
+    let authorized =
+      let header : Header.t = req |> Request.headers in
+      match db_config with
+      | None -> Auth.AuthFailed
+      | Some db_config ->
+        let context = {
+          Auth.allowed_users = db_config.allowed_users;
+        } in
+        (* this also handles the case of allowed_users = None *)
+        Auth.permitted_header auth ~context ~header
+    in
+    match authorized with
+    | Auth.AuthSuccess -> db_info_or_error
+    | Auth.AuthFailed -> fun () -> `AuthError
+  in
+  db_info_or_error
 
 let server prog_config =
   let config = Config.load prog_config.config_file in
+  let auth =
+    let { Config.users; _ } = config in
+    Auth.create { Auth.users } in
   let databases =
     config.databases |> Common.map_snd Db_writer.db_config_of_database
-  in
-  let _users =
-    if config.users <> [] then
-      failwith "Users not yet supported"
   in
   let _regexp_users =
     if config.regexp_users <> [] then
@@ -56,31 +98,26 @@ let server prog_config =
   in
   let db_spool = Db_spool.create { Db_spool.databases } in
   let callback _conn req body =
-    let _uri = req |> Cohttp.Request.uri |> Uri.to_string in
-    let query = req |> Cohttp.Request.uri |> Uri.query in
-    let _meth = req |> Request.meth |> Code.string_of_method in
-    let _headers = req |> Request.headers |> Header.to_string in
-    let db_info_or_error =
-      match List.assoc "db" query with
-      | [] | exception Not_found ->
-        `Error "Query is missing database name"
-      | [db_name] -> begin
-          match Db_spool.db db_spool db_name with
-          | None -> `Error "Unable to get database instance"
-          | Some db -> `Db db
-        end
-      | _ ->
-        `Error "Query is giving >1 database"
-    in
-    (match db_info_or_error with
-     | `Db db_info ->
+    let db_info_or_error = handle_setup { auth; config; db_spool; } req in
+    (match db_info_or_error () with
+     | `Db (db_info, _) ->
        let db = db_info.Db_spool.db in
        Lwt.finalize
          (fun () -> handle_request body db)
          (fun () -> db_info.Db_spool.release (); return ())
-     | `Error error -> return error
+     | `Error error -> return (`OK, None, error)
+     | `AuthError ->
+       let header = Cohttp.Header.init () in
+       let header = Cohttp.Header.add header "WWW-Authenticate" ("Basic realm=\"" ^ config.realm ^"\"") in
+       return (`Unauthorized, Some header, "unauthorized")
     )
-    >>= (fun body -> Server.respond_string ~status:`OK ~body ())
+    >>= fun (status, headers, body) ->
+    Server.respond_string ~status ~body () >>= fun (response, body) ->
+    let response = match headers with
+      | None -> response
+      | Some headers -> { response with headers = headers }
+    in
+    return (response, body)
   in
   Server.create ~mode:(`TCP (`Port prog_config.listen_port)) (Server.make ~callback ())
 

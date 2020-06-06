@@ -6,8 +6,14 @@ groups:
 users:
   testuser:
     group: testgroup # optional
-    password: hashhashhash
+    password:
+      type: plain
+      password: hashhashhash
     expires: 1590925427
+
+  testuser2:
+    group: testgroup # optional
+    token: abcdef
 
     # if token is provided, then client does not need to provide
     # user name (but it still matches this user)

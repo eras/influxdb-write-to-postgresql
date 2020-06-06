@@ -29,6 +29,7 @@ type group = {
 
 type password_type =
   | Plain
+[@@deriving show]
 
 let password_type_of_yojson = function
   | `String "plain" -> Ok Plain
@@ -40,14 +41,15 @@ let password_type_to_yojson = function
 type password = {
   type_: password_type [@key "type"];
   password: string;
-} [@@deriving yojson]
+} [@@deriving yojson, show]
 
 type user = {
   token: (string option [@default None]);
-  password: password;
+  password: password option [@default None];
   group: (string option [@default None]);
   expires: (float option [@default None]);
-} [@@deriving yojson]
+} [@@deriving yojson, show]
+let _ = pp_user
 
 type create_table_method =
   | CreateTable
@@ -93,6 +95,8 @@ type database = {
 
   db_user: string;
   db_password: string;
+
+  allowed_users: (string list option [@default None]);
 
   create_table: (create_table option [@default None]);
 
@@ -154,6 +158,8 @@ type t = {
   regexp_users : regexp_users [@default []];
 
   groups: groups [@default []];
+
+  realm : string [@default "IW2PG"];
 
   databases: (string * database) list [@of_yojson (associative_of_yojson database_of_yojson)];
   regexp_databases: (string * database) list [@default []] [@of_yojson (associative_of_yojson database_of_yojson)];

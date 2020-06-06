@@ -6,13 +6,13 @@ let _testDump _ctx =
       users = ["test", {
           token = None;
           group = None;
-          password = { type_ = Plain; password = "" };
+          password = Some { type_ = Plain; password = "" };
           expires = None;
         }];
       regexp_users = [".*", {
           group = None;
           token = None;
-          password = { type_ = Plain; password = "" };
+          password = Some { type_ = Plain; password = "" };
           expires = None;
         }];
       groups = [];
@@ -22,6 +22,7 @@ let _testDump _ctx =
           db_port = 4242;
           db_user = "asdf";
           db_password = "plop";
+          allowed_users = None;
           create_table = None;
           time_column = None;
           tags_jsonb_column = None;
@@ -31,6 +32,7 @@ let _testDump _ctx =
         });
       ];
       regexp_databases = [];
+      realm = "lala";
     }) in
   Config.dump config
 

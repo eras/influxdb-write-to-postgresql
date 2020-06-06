@@ -20,10 +20,11 @@ type password = {
 
 type user = {
   token : string option;
-  password : password;
+  password : password option;
   group : string option;
   expires : float option;
 }
+val pp_user : Format.formatter -> user -> unit
 
 type create_table_method =
   | CreateTable
@@ -49,6 +50,7 @@ type database = {
   db_port : int;
   db_user : string;
   db_password : string;
+  allowed_users : string list option; (* If defined, then the list of allowed users *)
   create_table : create_table option; (* allow to CREATE tables matching this regular expression *)
   time_column : string option;
   tags_jsonb_column : string option;
@@ -65,6 +67,7 @@ type t = {
   users : users;
   regexp_users : regexp_users;
   groups : groups;
+  realm : string;
   databases : (string * database) list;
   regexp_databases : (string * database) list;
 }
