@@ -1,6 +1,6 @@
 (library
  (public_name influxdb_write_to_postgresql)
- (libraries lwt postgresql cohttp-lwt-unix sedlex uutf yojson menhirLib containers yaml yaml.unix ppx_deriving_yojson.runtime re.perl cryptokit)
+ (libraries lwt postgresql cohttp-lwt-unix sedlex uutf yojson menhirLib containers yaml yaml.unix ppx_deriving_yojson.runtime re.perl cryptokit cmdliner)
  (preprocess (pps lwt_ppx sedlex.ppx ppx_deriving_yojson ppx_deriving.show)))
 
 (menhir (modules sql_parser))
