@@ -483,7 +483,7 @@ let check_and_update_tables (t : t) (measurement : Lexer.measurement) =
       Hashtbl.add t.database_info table_name made_table.md_table_info
     in
     let make_hypertable () =
-      let command = "SELECT create_hypertable(?, ?)" in
+      let command = "SELECT create_hypertable($1, $2)" in
       let params = [|table_name; t.config.time_column|] in
       ignore (t.db#exec ~expect:[Pg.Tuples_ok] ~params command)
     in
