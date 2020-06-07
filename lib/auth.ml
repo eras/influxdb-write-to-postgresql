@@ -27,8 +27,21 @@ type config = {
   users : Config.users;
 }
 
+type argon2_errorcode = Argon2.ErrorCodes.t
+let pp_argon2_errorcode fmt error_code =
+  Format.fprintf fmt "%s" (Argon2.ErrorCodes.message error_code)
+
+module Argon2CacheKeyOrder : Map.OrderedType with type t = (string * string) =
+struct
+  type t = (string * string)
+  let compare = compare
+end
+
+module Argon2Cache = Anycache.Make(Argon2CacheKeyOrder)(Anycache.Direct)
+
 type t = {
-  config : config
+  config : config;
+  argon2_cache : (bool, argon2_errorcode) result Argon2Cache.t;
 }
 
 type context = {
@@ -50,10 +63,6 @@ type result =
 let string_of_result = function
   | AuthSuccess -> "AuthSuccess"
   | AuthFailed -> "AuthFailed"
-
-type argon2_errorcode = Argon2.ErrorCodes.t
-let pp_argon2_errorcode fmt error_code =
-  Format.fprintf fmt "%s" (Argon2.ErrorCodes.message error_code)
 
 type error =
   | FailedToParseAuthorization
@@ -94,18 +103,31 @@ let _ = Printexc.register_printer (function
     | _ -> None
   )
 
-
 let create config =
-  { config }
+  { config;
+    argon2_cache = Argon2Cache.create 1024 }
 
-let auth_password_ok (_context : context) (pw : Config.password) request =
+let argon2_lookup t =
+  let lookup (encoded, password) =
+    match Argon2.verify ~encoded ~pwd:password ~kind:Argon2.I with
+    | Ok x -> Ok (Ok x)
+    (* the next might be a dynamic error, so don't cache it (?!) *)
+    | Error (Argon2.ErrorCodes.(THREAD_FAIL) as code) -> Error (Error (Argon2Error code))
+    | Error x -> Ok (Error x)   (* normally we cache errors *)
+  in
+  fun ~encoded ~pwd ->
+    match Argon2Cache.with_cache t.argon2_cache lookup (encoded, pwd) with
+    | Ok x -> x
+    | Error exn -> raise exn
+
+let auth_password_ok t (_context : context) (pw : Config.password) request =
   match pw.type_, request with
   | Plain, { user = _; password = Some password; token = None; } ->
     if pw.password = password
     then AuthSuccess
     else AuthFailed
   | Argon2,  { user = _; password = Some password; token = None; } -> begin
-      match Argon2.verify ~encoded:pw.password ~pwd:password ~kind:Argon2.I with
+      match argon2_lookup t ~encoded:pw.password ~pwd:password with
       | Ok true -> AuthSuccess
       | Ok false -> AuthFailed
       | Error Argon2.ErrorCodes.VERIFY_MISMATCH -> AuthFailed
@@ -144,7 +166,7 @@ let permitted t ~(context : context) ~(request : request) =
     Some (Some { Config.password = Some password; _ }) when List.mem user allowed_users ->
     (* If authentication is provided and configured, then does it
        match? *)
-    auth_password_ok context password request
+    auth_password_ok t context password request
   | Some _, _, _ ->
     (* Otherwise, reject *)
     AuthFailed
