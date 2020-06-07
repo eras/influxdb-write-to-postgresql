@@ -112,6 +112,12 @@ let container_info = lazy (
   container_info
 )
 
+let lwt_container_info = lazy (
+  let container_info = create_db_container () in
+  Lwt_main.at_exit (fun () -> stop_db_container container_info.ci_id; Lwt.return ());
+  container_info
+)
+
 type 'db_writer db_test_context = {
   db: 'db_writer;               (* at with_new_db we don't have this *)
   db_spec: Db_writer.db_spec Lazy.t;
@@ -156,16 +162,24 @@ CREATE DATABASE %s
        pg#finish);
     conninfo_with_dbname
 
-let with_conninfo _ctx f =
+type db_spec_format =
+  | DbSpecConnInfo
+  | DbSpecInfo
+
+let with_conninfo ?(container_info=container_info) ?(db_spec_format=DbSpecConnInfo) _ctx f =
   let pg_port = lazy ((PortMap.find "5432/tcp" (Lazy.force container_info).ci_ports).host_port) in
-  let db_spec = lazy (Db_writer.DbConnInfo ("user=postgres password=test host=localhost port=" ^ string_of_int (Lazy.force pg_port))) in
+  let db_spec =
+    lazy (
+      match db_spec_format with
+      | DbSpecConnInfo -> (Db_writer.DbConnInfo ("user=postgres password=test host=localhost port=" ^ string_of_int (Lazy.force pg_port)))
+      | DbSpecInfo -> Db_writer.DbInfo { Db_writer.db_host = "localhost"; db_port = Lazy.force pg_port; db_user = "postgres"; db_password = "test"; db_name = ""; }) in
   try
     f { db = (); db_spec }
   with Postgresql.Error error ->
     Printf.ksprintf OUnit2.assert_failure "Postgresql.Error: %s" (Postgresql.string_of_error error)
 
-let with_new_db ctx schema f =
-  with_conninfo ctx @@ fun { db_spec; db = () } ->
+let with_new_db ?container_info ?db_spec_format ctx schema f =
+  with_conninfo ?container_info ?db_spec_format ctx @@ fun { db_spec; db = () } ->
   let db_spec = lazy (create_new_database ?schema (Lazy.force db_spec)) in
   f { db = (); db_spec; }
 

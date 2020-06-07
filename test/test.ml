@@ -8,6 +8,7 @@ let suite =
     Test_sql.suite;
     Test_config.suite;
     Test_auth.suite;
+    Test_iw2pg.suite;
   ]
 
 let () =
