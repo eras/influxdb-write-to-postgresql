@@ -45,7 +45,12 @@ let output_yaml_config channel yaml =
   | Ok str -> output_string channel str
   | Error (`Msg message) -> failwith message
 
-exception Timeout
+exception Timeout of string
+
+let _ = Printexc.register_printer (function
+    | Timeout msg -> Some ("Timeout: " ^ msg)
+    | _ -> None
+  )
 
 let post ~body ~headers ~uri =
   let open Cohttp in
@@ -58,7 +63,8 @@ let post ~body ~headers ~uri =
         return (Ok (code, body))
       ) (fun exn -> return (Error exn))
   in
-  Lwt.pick [post; Lwt_unix.timeout 1.0]
+  Lwt.pick [post;
+            Lwt_unix.sleep 5.0 >>= fun () -> Lwt.fail (Timeout "post")]
 
 let expect ~expect_code = function
   | Error exn ->
@@ -118,18 +124,22 @@ let terminate pid =
 
 let wait_head ~uri =
   let open Cohttp_lwt_unix in
+  let counter = ref 0 in
   let rec retry retries_left =
+    incr counter;
     Lwt.catch (fun () ->
-        Client.head uri >>= fun _resp ->
+        Lwt_unix.with_timeout 1.0 (fun () -> Client.head uri) >>= fun _resp ->
         return (Ok ())
       ) (fun exn -> return (Error exn)) >>= function
     | Ok () -> return ()
+    | Error Lwt_unix.Timeout
     | Error (Unix.Unix_error(Unix.ECONNREFUSED, "connect", _)) when retries_left > 0 ->
       Lwt_unix.sleep 0.1 >>= fun () ->
       retry (retries_left - 1)
     | Error exn -> Lwt.fail exn
   in
-  Lwt.pick [retry 50; Lwt_unix.timeout 5.0]
+  Lwt.pick [retry 50;
+            Lwt_unix.sleep 5.0 >>= fun () -> Lwt.fail (Timeout ("wait_head " ^ string_of_int !counter))]
 
 let with_iw2pg prog_config f =
   let pid = Lwt_unix.fork () in
