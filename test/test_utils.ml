@@ -135,7 +135,7 @@ let retry f =
       | None -> assert false
       | Some exn -> `Exn exn
   in
-  unvaluefy (loop 5 None)
+  unvaluefy (loop 10 None)
 
 let create_new_database =
   let db_id_counter = ref 0 in
