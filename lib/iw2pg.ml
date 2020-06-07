@@ -3,7 +3,7 @@ module C = Cohttp
 open Cohttp_lwt_unix
 
 type prog_config = {
-  listen_port: int;
+  listen_at: Conduit_lwt_unix.server;
   config_file: string;
 }
 
@@ -120,7 +120,8 @@ let server prog_config =
     in
     return (response, body)
   in
-  Server.create ~mode:(`TCP (`Port prog_config.listen_port)) (Server.make ~callback ())
+  (* (`TCP (`Port prog_config.listen_at)) *)
+  Server.create ~mode:prog_config.listen_at (Server.make ~callback ())
 
 let iw2pg prog_config = ignore (Lwt_main.run (server prog_config))
 
@@ -128,8 +129,8 @@ let main () =
   let _ = Hashtbl.randomize () in
   let open Cmdliner in
   let open Cmdargs in
-  let wrap_to_prog_config listen_port config_file =
-    iw2pg { listen_port; config_file }
+  let wrap_to_prog_config listen_at config_file =
+    iw2pg { listen_at; config_file }
   in
-  let iw2pg_t = Term.(const wrap_to_prog_config $ port $ config_file) in
+  let iw2pg_t = Term.(const wrap_to_prog_config $ listen_at $ config_file) in
   Term.exit @@ Term.eval (iw2pg_t, Term.info "iw2pg")
