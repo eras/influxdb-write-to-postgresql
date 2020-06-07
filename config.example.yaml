@@ -1,4 +1,5 @@
 ---
+# groups are not supported yet
 groups:
   testgroup:
     expires: 1590925427
@@ -7,11 +8,16 @@ users:
   testuser:
     group: testgroup # optional
     password:
-      type: plain
-      password: hashhashhash
+      type: plain # or: argon2
+      password: plain_text_password
     expires: 1590925427
 
   testuser2:
+    password:
+      type: argon2
+      password: $argon2i$v=19$m=4096,t=3,p=1$MDEyMzQ1Njc4OQ$olhpdTlEtA/vrolxbzIHZf29IsTflonzjnTDMkS7BCU
+
+  testuser3:
     group: testgroup # optional
     token: abcdef
 
@@ -31,25 +37,29 @@ databases:
   somedb:
     db_host: port0.mf
     db_port: 5432
-
-    # if db_name is omitted, the db_ config name "somedb" is used
     db_name: test
-
     db_user: user42
-
     db_password: passw0rd
 
-    # # alternatively:
-    # # use_user_db_credentials: true
+    # configure table creation (enabled for all tables by default):
+    create_table:
+      regexp: /.+/
+      method: create_table # default is create_table. use create_hypertable for TimeScaleDB
 
-    # # set the time column if its name is not "time":
+    # # set the time column, defaults to "time"
     # time_column: time
 
-    # # if you want to put tags in a JSONB column:
+    # # set the name of tags column defaults to "tags"
     # tags_jsonb_column: tags
-    # # otherwise tag columns are fixed and automatically
-    # # determined from your unique index
+    # # set to null to disable. then tag columns are fixed and
+    # # automatically determined from your unique index
 
+    # # if you want to put fields in a JSONB column:
+    # fields_jsonb_column: fields
+    # # set to null disable. then fields columns are automatically
+    # # created as needed but
+
+    # TODO:
     # # if you want to define which tags make up the tags:
     # # (note that if tags_jsonb_column is set, then these
     # # limit which keys to use from it)
@@ -57,12 +67,10 @@ databases:
     #   - tag1
     #   - tag2
 
-    # # if you want to put fields in a JSONB column:
-    # fields_jsonb_column: fields
-    # # otherwise fields columns are automatically created as needed
-    # # but if you want to define which fields are permitted:
-    # # (note that if fields_jsonb_column is set, then these
-    # # limit which keys to use from it)
+    # TODO:
+    # # if you want to define which fields are permitted: (note that
+    # # if fields_jsonb_column is set, then these limit which keys to
+    # # use from it)
     # field_columns:
     #   - field1
     #   - field2
