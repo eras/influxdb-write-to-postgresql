@@ -12,6 +12,7 @@ type group = { expires : float option; }
 
 type password_type =
   | Plain
+  | Argon2
 
 type password = {
   type_: password_type;

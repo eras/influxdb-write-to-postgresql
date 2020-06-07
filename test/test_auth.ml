@@ -48,14 +48,14 @@ let case ~user ~password ~token ~expect auth_request =
 
 let flip f a b = f b a
 
-let user_pass_config =
+let user_pass_config ?(password=(Config.Plain, "password1")) () =
   { Auth.users =
       let open Config in
       ["test1",
        {
          token = None;
          group = None;
-         password = Some { type_ = Plain; password = "password1" };
+         password = Some { type_ = fst password; password = snd password };
          expires = None;
        }]
   }
@@ -92,7 +92,15 @@ let no_auth_driver auth_request =
   case ~user ~password ~token ~expect auth_request
 
 let testPlain _ctx =
-  let auth = Auth.create user_pass_config in
+  let auth = Auth.create (user_pass_config ()) in
+  let context = { Auth.allowed_users = Some ["test1"; "test2"] } in
+  user_password_driver @@ fun ~(request:Auth.request) ->
+  Auth.permitted auth ~context ~request
+
+let testArgon2 _ctx =
+  (* encrypted "password1" *)
+  let password = Config.(Argon2, {|$argon2i$v=19$m=4096,t=3,p=1$aGVsbG93b3JsZA$T0FmZ4u+J2dXCUHmfCytd5L1dqOzbxlpYSyci7jCWaA|}) in
+  let auth = Auth.create (user_pass_config ~password ()) in
   let context = { Auth.allowed_users = Some ["test1"; "test2"] } in
   user_password_driver @@ fun ~(request:Auth.request) ->
   Auth.permitted auth ~context ~request
@@ -113,7 +121,7 @@ let basic_of_request (request : Auth.request) =
     Cohttp.Header.add headers "Authorization" (Printf.sprintf "Basic %s" base64)
 
 let testBasic _ctx =
-  let auth = Auth.create user_pass_config in
+  let auth = Auth.create (user_pass_config ()) in
   let context = { Auth.allowed_users = Some ["test1"; "test2"] } in
   user_password_driver @@ fun ~(request:Auth.request) ->
   let header = basic_of_request request in
@@ -170,6 +178,7 @@ let testNoAuth _ctx =
 
 let suite = "Db_auth" >::: [
   "testPlain" >:: testPlain;
+  "testArgon2" >:: testArgon2;
   "testBasic" >:: testBasic;
   "testToken" >:: testToken;
   "testNoAuth" >:: testNoAuth;

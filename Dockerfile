@@ -16,6 +16,7 @@ RUN opam install -y re
 RUN sudo apt-get -y install libgmp-dev libssl-dev zlib1g-dev
 RUN opam install -y cryptokit
 RUN opam install -y unix-type-representations
+RUN opam install -y argon2
 
 COPY dune-project influxdb_write_to_postgresql.* /work/
 COPY main /work/main/

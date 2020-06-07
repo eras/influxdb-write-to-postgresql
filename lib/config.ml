@@ -29,14 +29,17 @@ type group = {
 
 type password_type =
   | Plain
+  | Argon2
 [@@deriving show]
 
 let password_type_of_yojson = function
   | `String "plain" -> Ok Plain
+  | `String "argon2" -> Ok Argon2
   | _ -> Stdlib.Error "Invalid password type"
 
 let password_type_to_yojson = function
   | Plain -> `String "plain"
+  | Argon2 -> `String "argon2"
 
 type password = {
   type_: password_type [@key "type"];

@@ -30,6 +30,7 @@ type error =
   | FailedToParseAuthorization
   | FailedToParseAuthorizationBasic
   | CryptokitError of Cryptokit.error
+  | Argon2Error of Argon2.ErrorCodes.t
 
 (** For testing *)
 val show_error :  error -> string

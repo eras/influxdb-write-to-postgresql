@@ -51,10 +51,15 @@ let string_of_result = function
   | AuthSuccess -> "AuthSuccess"
   | AuthFailed -> "AuthFailed"
 
+type argon2_errorcode = Argon2.ErrorCodes.t
+let pp_argon2_errorcode fmt error_code =
+  Format.fprintf fmt "%s" (Argon2.ErrorCodes.message error_code)
+
 type error =
   | FailedToParseAuthorization
   | FailedToParseAuthorizationBasic
   | CryptokitError of Cryptokit.error
+  | Argon2Error of argon2_errorcode
 [@@deriving show]
 
 exception Error of error
@@ -82,6 +87,7 @@ let string_of_error = function
       | Entropy_source_closed -> "Entropy source closed"
       | Compression_not_supported -> "Compression not supported"
     end
+  | Argon2Error error_code -> Argon2.ErrorCodes.message error_code
 
 let _ = Printexc.register_printer (function
     | Error error -> Some (string_of_error error)
@@ -98,7 +104,14 @@ let auth_password_ok (_context : context) (pw : Config.password) request =
     if pw.password = password
     then AuthSuccess
     else AuthFailed
-  | Plain, _ ->
+  | Argon2,  { user = _; password = Some password; token = None; } -> begin
+      match Argon2.verify ~encoded:pw.password ~pwd:password ~kind:Argon2.I with
+      | Ok true -> AuthSuccess
+      | Ok false -> AuthFailed
+      | Error Argon2.ErrorCodes.VERIFY_MISMATCH -> AuthFailed
+      | Error error_code -> raise (Error (Argon2Error error_code))
+    end
+  | (Plain | Argon2), _ ->
     AuthFailed
 
 let auth_token_ok (config : config) (token : string) =
