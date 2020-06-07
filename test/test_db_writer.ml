@@ -207,6 +207,32 @@ DO UPDATE SET fields=meas.fields||excluded.fields|} (fst query);
   assert_equal ~printer:(fun x -> Array.to_list x |> String.concat ",") [|"1590329952"; "1"; "2"; {|{"value":42}|}|]
     (snd query)
 
+let assert_tables db expect =
+  let module DI = Db_writer.Internal in
+  let sort xs = List.sort compare xs in
+  let tables =
+    Db_writer.Internal.query_database_info db
+    |> Hashtbl.to_seq
+    |> List.of_seq
+    |> Common.map_snd (fun x -> x.DI.fields |> DI.FieldMap.to_seq |> Seq.map fst |> List.of_seq |> sort)
+    |> sort in
+  assert_equal ~printer:[%derive.show: (string * string list) list]
+    (expect |> Common.map_snd (sort) |> sort)
+    tables
+
+let tags_fields json_tags json_fields =
+  let tags =
+    match json_tags with
+    | None -> "moi1, moi2", ["moi1"; "moi2"]
+    | Some tags -> tags ^ "->>'moi1', " ^ tags ^ "->>'moi2'", [tags]
+  in
+  let fields =
+    match json_fields with
+    | None -> "value", ["value"]
+    | Some fields -> fields ^ "->>'value'", [fields]
+  in
+  (tags, fields)
+
 let testWriteBase ?(duplicate_write=false) ?json_tags ?json_fields ?make_config ?schema ctx =
   Test_utils.with_db_writer ?make_config ctx ?schema @@ fun { db; db_spec } ->
   let db = Lazy.force db in
@@ -221,16 +247,8 @@ let testWriteBase ?(duplicate_write=false) ?json_tags ?json_fields ?make_config 
      ignore (Db_writer.write db [meas]);
      if duplicate_write then ignore (Db_writer.write db [meas]);
      let direct = Db_writer.Internal.new_pg_connection (Lazy.force db_spec) in
-     let tags =
-       match json_tags with
-       | None -> "moi1, moi2"
-       | Some tags -> tags ^ "->>'moi1', " ^ tags ^ "->>'moi2'"
-     in
-     let fields =
-       match json_fields with
-       | None -> "value"
-       | Some fields -> fields ^ "->>'value'"
-     in
+     let (tags, tag_fields), (fields, fields_fields) = tags_fields json_tags json_fields in
+     assert_tables direct ["meas", ["time"] @ tag_fields @ fields_fields];
      let result = direct#exec ~expect:[Postgresql.Tuples_ok] ("SELECT extract(epoch from time), " ^ tags ^ ", " ^ fields ^ " FROM meas") in
      match result#get_all_lst with
      | [[time; moi1; moi2; value]] ->
@@ -322,16 +340,8 @@ let testWriteMultiBase ?json_tags ?json_fields ?make_config ?schema ctx =
     (try
        ignore (Db_writer.write db input);
        let direct = Db_writer.Internal.new_pg_connection (Lazy.force db_spec) in
-       let tags =
-         match json_tags with
-         | None -> "moi1, moi2"
-         | Some tags -> tags ^ "->>'moi1', " ^ tags ^ "->>'moi2'"
-       in
-       let fields =
-         match json_fields with
-         | None -> "value"
-         | Some fields -> fields ^ "->>'value'"
-       in
+       let (tags, tag_fields), (fields, fields_fields) = tags_fields json_tags json_fields in
+       assert_tables direct ["meas", ["time"] @ tag_fields @ fields_fields];
        let query = "SELECT extract(epoch from time), " ^ tags ^ ", " ^ fields ^ " FROM meas" in
        let result = direct#exec ~expect:[Postgresql.Tuples_ok] query in
        assert_equal ~printer:string_of_int (List.length all_reference_content) (List.length result#get_all_lst);

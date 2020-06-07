@@ -452,9 +452,7 @@ let check_and_update_columns ~kind t table_name values =
        with Not_found -> FieldMap.empty)
       values
   in
-  match missing_columns, kind, t.config.tags_column with
-  | [], _, _ -> ()
-  | missing_columns, `Fields, _ ->
+  let update_missing_columns missing_columns =
     update t.database_info { fields = FieldMap.empty } table_name (fun _table_info ->
         { fields = new_columns }
       );
@@ -466,9 +464,18 @@ let check_and_update_columns ~kind t table_name values =
                  (db_of_field_type field_type)
               )
            )
-  | missing_columns, `Tags, None ->
+  in
+  match missing_columns, kind, t.config.tags_column, t.config.fields_column with
+  | [], _, _, _ -> ()
+  | missing_columns, `Fields, _, Some fields_column ->
+    missing_columns
+    |> List.filter (fun (field, _) -> field == fields_column)
+    |> update_missing_columns
+  | missing_columns, `Fields, _, None ->
+    update_missing_columns missing_columns
+  | missing_columns, `Tags, None, _ ->
     raise (Error (CannotAddTags (List.map fst missing_columns)))
-  | _, `Tags, Some _ ->
+  | _, `Tags, Some _, _ ->
     () (* these are inside a json and will be added dynamically *)
 
 let check_and_update_tables (t : t) (measurement : Lexer.measurement) =
