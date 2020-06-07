@@ -428,6 +428,11 @@ let _ = Printexc.register_printer (function
     | _ -> None
   )
 
+let _ = Printexc.register_printer (function
+    | Pg.Error error -> Some (Pg.string_of_error error)
+    | _ -> None
+  )
+
 let update hashtbl default key f =
   match Hashtbl.find_opt hashtbl key with
   | None -> Hashtbl.add hashtbl key (f default)
