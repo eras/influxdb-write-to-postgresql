@@ -161,7 +161,8 @@ let testTwoNoTime _ctx =
   let meas1, meas2 =
     match
       lines (Sedlexing.Utf8.from_string {|meas,id=1 field="moi\"taas"
-meas,id=2 field="moi2"|})
+meas,id=2 field="moi2"
+|})
     with
     | meas1::meas2::[] -> (meas1, meas2)
     | _ -> assert_failure "Invalid number of results from lines"

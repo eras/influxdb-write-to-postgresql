@@ -212,6 +212,7 @@ let lines buf =
         | '\n' -> loop aux
         | any -> log_raise (Error {info = Parse_error; message = "lines"})
         | _ -> List.rev aux )
+    | eof -> List.rev aux
     | _ -> log_raise (Error {info = Parse_error; message = "lines"})
   in
   loop []
