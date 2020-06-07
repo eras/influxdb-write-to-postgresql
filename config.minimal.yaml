@@ -1,0 +1,9 @@
+# this configuration does no user authentication
+
+databases:
+  somedb:
+    db_host: port0.mf
+    db_port: 5432
+    db_name: test
+    db_user: user42
+    db_password: passw0rd
