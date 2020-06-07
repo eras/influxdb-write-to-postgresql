@@ -15,6 +15,13 @@ connection it reads all the data there is and sends the appriopriate
 transaction, using `ALTER TABLE tablename ADD COLUMN ..` to add new
 columns as needed (if not using JSONB fields).
 
+## Why? ##
+
+I felt the Influxdb query language was limited but its input facility
+excellent. PostgreSQL/TimeScaleDB also allows storing relational data
+in the same database which can be quite nice for making queries with
+joins.
+
 ## Configuration ##
 
 Currently the supported [YAML](https://yaml.org) configuration is
@@ -155,13 +162,6 @@ only need to do the pull the first time. It would also get
 automatically pulled from inside the test, but due to the default
 timeouts and that the operation may take some time, I suggest
 downloading it beforehand.
-
-## Why? ##
-
-I felt the Influxdb query language was limited but its input facility
-excellent. PostgreSQL/TimeScaleDB also allows storing relational data
-in the same database which can be quite nice for making queries with
-joins.
 
 <!-- Local Variables: -->
 <!-- tab-width: 8 -->
