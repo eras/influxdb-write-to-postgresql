@@ -25,11 +25,11 @@ does not provide user authentication):
 ```
 databases:
   somedb:
-	db_host: dbserver1
-	db_port: 5432
-	db_name: test
-	db_user: user42
-	db_password: passw0rd
+    db_host: dbserver1
+    db_port: 5432
+    db_name: test
+    db_user: user42
+    db_password: passw0rd
 ```
 
 `somedb` is the label used in endpoint
@@ -53,10 +53,10 @@ used for the tags.
 
 ```
 CREATE TABLE testtable (
-	time timestamptz NOT NULL,
-	tags JSONB NOT NULL,          -- all the tags
-	fields JSONB NOT NULL,        -- all the fields
-	UNIQUE(time, tags)
+    time timestamptz NOT NULL,
+    tags JSONB NOT NULL,          -- all the tags
+    fields JSONB NOT NULL,        -- all the fields
+    UNIQUE(time, tags)
 );
 ```
 
@@ -72,12 +72,12 @@ the `tags`.
 
 ```
 CREATE TABLE testtable (
-	time timestamptz NOT NULL,
-	id STRING NOT NULL,           -- tag
-	location STRING NOT NULL,     -- tag
-	temperature DOUBLE PRECISION, -- field
-	co2 DOUBLE PRECISION,         -- field
-	UNIQUE(time, id, location)    -- list time and all the tags
+    time timestamptz NOT NULL,
+    id STRING NOT NULL,           -- tag
+    location STRING NOT NULL,     -- tag
+    temperature DOUBLE PRECISION, -- field
+    co2 DOUBLE PRECISION,         -- field
+    UNIQUE(time, id, location)    -- list time and all the tags
 );
 ```
 
@@ -162,3 +162,7 @@ I felt the Influxdb query language was limited but its input facility
 excellent. PostgreSQL/TimeScaleDB also allows storing relational data
 in the same database which can be quite nice for making queries with
 joins.
+
+<!-- Local Variables: -->
+<!-- tab-width: 8 -->
+<!-- End: -->
