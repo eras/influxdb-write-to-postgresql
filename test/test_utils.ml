@@ -134,7 +134,7 @@ let retry f =
 let create_new_database =
   let db_id_counter = ref 0 in
   fun ?schema db_spec ->
-    let name = Printf.sprintf "test_db_%03d" !db_id_counter in
+    let name = Printf.sprintf "test_db_%d_%03d" (Unix.getpid ()) !db_id_counter in
     let _ = incr db_id_counter in
     let pg = retry @@ fun () ->
       Db_writer.Internal.new_pg_connection db_spec
