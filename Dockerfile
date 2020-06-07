@@ -6,18 +6,21 @@ RUN opam update
 RUN opam install -y dune lwt lwt_ppx postgresql cohttp-lwt-unix \
     sedlex postgresql ounit2 ounit2-lwt uutf yojson menhir containers \
     yaml decoders-yojson ppx_deriving_yojson cmdliner re cryptokit \
-    unix-type-representations argon2 anycache
+    unix-type-representations argon2 anycache git
 
 COPY dune-project influxdb_write_to_postgresql.* /work/
+COPY [".git", "/work/.git"] # for version information
+WORKDIR /work
+RUN sudo git reset --hard
+# but copy extra files (if any) so development experience is nicer
 COPY main /work/main/
 COPY lib /work/lib/
 COPY test /work/test/
 
-WORKDIR /work
-
 RUN sudo chown -R opam /work
 
-RUN eval $(opam env) && dune build --profile release
+RUN eval $(opam env) && dune build --profile release && dune install --prefix=/tmp/iw2pg
+RUN /tmp/iw2pg/bin/iw2pg --version
 
 #FROM alpine:latest
 #RUN apk --no-cache add libpq ca-certificates
@@ -26,7 +29,7 @@ FROM debian:buster-slim
 RUN apt-get update && apt-get install -y libpq5 ca-certificates libgmpxx4ldbl libargon2-1
 RUN rm -rf /var/cache/apt /var/lib/apt
 WORKDIR /app
-COPY --from=builder /work/_build/default/main/iw2pg.exe /app/iw2pg
+COPY --from=builder /tmp/iw2pg/bin/iw2pg /app/iw2pg
 
 RUN ls -l /app/iw2pg
 

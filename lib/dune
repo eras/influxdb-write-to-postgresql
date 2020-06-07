@@ -3,4 +3,9 @@
  (libraries lwt postgresql cohttp-lwt-unix sedlex uutf yojson menhirLib containers yaml yaml.unix ppx_deriving_yojson.runtime re.perl cryptokit cmdliner unix-type-representations argon2 anycache)
  (preprocess (pps lwt_ppx sedlex.ppx ppx_deriving_yojson ppx_deriving.show)))
 
+(rule
+ (targets version.ml)
+ (deps (universe))
+ (action  (run sh -c "git describe --tags --always --dirty | sed 's/.*/let version = \"&\"/' > %{targets}")))
+
 (menhir (modules sql_parser))

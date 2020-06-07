@@ -4,4 +4,4 @@
 
 (install
  (section bin)
- (files (iw2pg.exe as influxdb-write-to-postgresql)))
+ (files (iw2pg.exe as iw2pg)))

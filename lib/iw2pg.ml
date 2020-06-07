@@ -132,5 +132,6 @@ let main () =
   let wrap_to_prog_config listen_at config_file =
     iw2pg { listen_at; config_file }
   in
+  let version = Version.version in
   let iw2pg_t = Term.(const wrap_to_prog_config $ listen_at $ config_file) in
-  Term.exit @@ Term.eval (iw2pg_t, Term.info "iw2pg")
+  Term.exit @@ Term.eval (iw2pg_t, Term.info ~version "iw2pg")
