@@ -84,7 +84,7 @@ let regexp_to_yojson (Regexp (original, _)) = `String original
 
 type create_table = {
   regexp: regexp;
-  method_: (create_table_method [@key "method"])
+  method_: create_table_method [@key "method"]
 } [@@deriving yojson]
 
 type database = {
