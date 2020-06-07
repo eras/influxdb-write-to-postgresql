@@ -77,10 +77,15 @@ module Internal: sig
     fields: field_type FieldMap.t
   }
 
+  type table_name = string
+
+  type database_info = (table_name, table_info) Hashtbl.t
+
   val new_pg_connection : db_spec -> Pg.connection
   val db_of_identifier : string -> string
   val db_of_field_type : field_type -> string
   val insert_of_measurement : t -> Lexer.measurement -> string * string array
+  val query_database_info : Pg.connection -> database_info
 
   type made_table = {
     md_command : string;

@@ -70,14 +70,16 @@ struct
   type table_info = {
     fields: field_type FieldMap.t
   }
+
+  type database_info = (table_name, table_info) Hashtbl.t
+
+  let create_database_info () : database_info = Hashtbl.create 10
 end
 
 open Internal0
 
 
 let map_fields f table_info = { fields = f table_info.fields }
-
-type database_info = (table_name, table_info) Hashtbl.t
 
 type t = {
   mutable db: Pg.connection; (* mutable for reconnecting *)
@@ -88,8 +90,6 @@ type t = {
   mutable database_info: database_info;
   mutable indices: string list list TableMap.t;
 }
-
-let create_database_info () : database_info = Hashtbl.create 10
 
 type query = string
 
@@ -271,7 +271,7 @@ struct
     (query, time @ params |> Array.of_list)
 
   let query_database_info (db: Pg.connection) =
-    let result = db#exec ~expect:[Pg.Tuples_ok] "SELECT table_name, column_name, data_type FROM INFORMATION_SCHEMA.COLUMNS" in
+    let result = db#exec ~expect:[Pg.Tuples_ok] "SELECT table_name, column_name, data_type FROM INFORMATION_SCHEMA.COLUMNS WHERE table_schema='public'" in
     let database_info = create_database_info () in
     let () = result#get_all_lst |> List.iter @@ function
     | [table_name; column_name; data_type] ->
