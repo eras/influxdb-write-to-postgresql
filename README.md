@@ -148,7 +148,7 @@ Written in OCaml. Read the Dockerfile for exact dependencies (so the
 list of required apt and opam packages); use `dune build` to build.
 
 Run tests with `dune test`. It requires docker to run the image
-[`postgres:11`](https://hub.docker.com/_/postgres).
+[`timescale/timescaledb:latest-pg11`](https://hub.docker.com/r/timescale/timescaledb/).
 
 ## Running tests ##
 
