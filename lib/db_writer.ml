@@ -278,7 +278,7 @@ struct
       Hashtbl.find_opt database_info table_name
       |> Option.value ~default:{ fields = FieldMap.empty }
       |> map_fields (FieldMap.add column_name (field_type_of_db data_type))
-      |> Hashtbl.add database_info table_name
+      |> Hashtbl.replace database_info table_name
     | _ -> assert false
     in
     database_info
@@ -435,8 +435,8 @@ let _ = Printexc.register_printer (function
 
 let update hashtbl default key f =
   match Hashtbl.find_opt hashtbl key with
-  | None -> Hashtbl.add hashtbl key (f default)
-  | Some value -> Hashtbl.add hashtbl key (f value)
+  | None -> Hashtbl.replace hashtbl key (f default)
+  | Some value -> Hashtbl.replace hashtbl key (f value)
 
 (** Ensure database has the columns we need *)
 let check_and_update_columns ~kind t table_name values =
@@ -480,7 +480,7 @@ let check_and_update_tables (t : t) (measurement : Lexer.measurement) =
       let made_table = make_table_command t measurement in
       ignore (t.db#exec ~expect:[Pg.Command_ok] made_table.md_command);
       t.indices <- made_table.md_update_pks t.indices;
-      Hashtbl.add t.database_info table_name made_table.md_table_info
+      Hashtbl.replace t.database_info table_name made_table.md_table_info
     in
     let make_hypertable () =
       let command = "SELECT create_hypertable($1, $2)" in
