@@ -101,14 +101,14 @@ type database = {
 
   allowed_users: (string list option [@default None]);
 
-  create_table: (create_table option [@default None]);
+  create_table: (create_table option [@default Some { regexp = regexp ".+"; method_ = CreateTable }]);
 
-  time_column: (string option [@default None]);
-  tags_jsonb_column: (string option [@default None]);
+  time_column: (string option [@default Some "time"]);
+  tags_jsonb_column: (string option [@default Some "tags"]);
 
   tag_columns: (string list option [@default None]);
 
-  fields_jsonb_column: (string option [@default None]);
+  fields_jsonb_column: (string option [@default Some "fields"]);
   field_columns: (string list option [@default None]);
 } [@@deriving yojson]
 

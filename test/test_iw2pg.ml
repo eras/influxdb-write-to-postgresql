@@ -18,11 +18,11 @@ let make_config db_spec ~influxdb_name ~authentication =
                            "db_user", `String db_spec.db_user;
                            "db_password", `String db_spec.db_password;
                            "db_name", `String db_spec.db_name;
-                           "create_table", `O ["regexp", `String "/.*/";
-                                               "method", `A [`String "CreateTable"]];
-                           "time_column", `String "time";
-                           "tags_jsonb_column", `String "tags";
-                           "fields_jsonb_column", `String "fields";
+                           (* "create_table", `O ["regexp", `String {|/^.+$/|};
+                            *                     "method", `A [`String "CreateTable"]]; *)
+                           (* "time_column", `String "time"; *)
+                           (* "tags_jsonb_column", `String "tags"; *)
+                           (* "fields_jsonb_column", `String "fields"; *)
                            "allowed_users", (
                              match authentication with
                              | false -> `Null
