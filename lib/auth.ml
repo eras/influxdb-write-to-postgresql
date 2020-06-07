@@ -51,6 +51,44 @@ let string_of_result = function
   | AuthSuccess -> "AuthSuccess"
   | AuthFailed -> "AuthFailed"
 
+type error =
+  | FailedToParseAuthorization
+  | FailedToParseAuthorizationBasic
+  | CryptokitError of Cryptokit.error
+[@@deriving show]
+
+exception Error of error
+
+let string_of_error = function
+  | FailedToParseAuthorization ->
+    "Failed to parse authorization"
+  | FailedToParseAuthorizationBasic ->
+    "Failed to parse basic authorization"
+  | CryptokitError error -> begin
+      let open Cryptokit in
+      match error with
+      | Wrong_key_size -> "Wrong key size"
+      | Wrong_IV_size -> "Wrong IV size"
+      | Wrong_data_length -> "Wrong data length"
+      | Bad_padding -> "Bad padding"
+      | Output_buffer_overflow -> "Output buffer overflow"
+      | Incompatible_block_size -> "Incompatible block size"
+      | Number_too_long -> "Number too long"
+      | Seed_too_short -> "Seed too short"
+      | Message_too_long -> "Message too long"
+      | Bad_encoding -> "Bad encoding"
+      | Compression_error _ -> "Compression error"
+      | No_entropy_source -> "No entropy source"
+      | Entropy_source_closed -> "Entropy source closed"
+      | Compression_not_supported -> "Compression not supported"
+    end
+
+let _ = Printexc.register_printer (function
+    | Error error -> Some (string_of_error error)
+    | _ -> None
+  )
+
+
 let create config =
   { config }
 
@@ -97,43 +135,6 @@ let permitted t ~(context : context) ~(request : request) =
   | Some _, _, _ ->
     (* Otherwise, reject *)
     AuthFailed
-
-type error =
-  | FailedToParseAuthorization
-  | FailedToParseAuthorizationBasic
-  | CryptokitError of Cryptokit.error
-[@@deriving show]
-
-exception Error of error
-
-let string_of_error = function
-  | FailedToParseAuthorization ->
-    "Failed to parse authorization"
-  | FailedToParseAuthorizationBasic ->
-    "Failed to parse basic authorization"
-  | CryptokitError error -> begin
-      let open Cryptokit in
-      match error with
-      | Wrong_key_size -> "Wrong key size"
-      | Wrong_IV_size -> "Wrong IV size"
-      | Wrong_data_length -> "Wrong data length"
-      | Bad_padding -> "Bad padding"
-      | Output_buffer_overflow -> "Output buffer overflow"
-      | Incompatible_block_size -> "Incompatible block size"
-      | Number_too_long -> "Number too long"
-      | Seed_too_short -> "Seed too short"
-      | Message_too_long -> "Message too long"
-      | Bad_encoding -> "Bad encoding"
-      | Compression_error _ -> "Compression error"
-      | No_entropy_source -> "No entropy source"
-      | Entropy_source_closed -> "Entropy source closed"
-      | Compression_not_supported -> "Compression not supported"
-    end
-
-let _ = Printexc.register_printer (function
-    | Error error -> Some (string_of_error error)
-    | _ -> None
-  )
 
 type authorization =
   | Basic of (string * string)
