@@ -32,6 +32,7 @@ type password_type =
   | Argon2
 [@@deriving show]
 
+(* don't use derived yojson handling; it puts things inside an array *)
 let password_type_of_yojson = function
   | `String "plain" -> Ok Plain
   | `String "argon2" -> Ok Argon2
@@ -57,7 +58,16 @@ let _ = pp_user
 type create_table_method =
   | CreateTable
   | CreateHyperTable
-[@@deriving yojson]
+
+(* don't use derived yojson handling; it puts things inside an array *)
+let create_table_method_of_yojson = function
+  | `String "create_table" -> Ok CreateTable
+  | `String "create_hypertable" -> Ok CreateHyperTable
+  | _ -> Error "Expected create_table or create_hypertable"
+
+let create_table_method_to_yojson = function
+  | CreateTable -> `String "create_table"
+  | CreateHyperTable -> `String "create_hypertable"
 
 type regexp = Regexp of string * Re.re
 
