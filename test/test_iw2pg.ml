@@ -199,11 +199,11 @@ let uri_at listen_at path =
   in
   Uri.of_string (Printf.sprintf "http://localhost:%d/%s" port path)
 
-let send _ctx ~body ~iw2pg_context:{ listen_at; _ } ~influxdb_name =
+let send ?(path="write") _ctx ~body ~iw2pg_context:{ listen_at; _ } ~influxdb_name =
   let headers = Cohttp.Header.init () in
   let test_uri = uri_at listen_at "" in
   wait_head ~uri:test_uri >>= fun () ->
-  let uri = uri_at listen_at (Printf.sprintf "write?db=%s" influxdb_name) in
+  let uri = uri_at listen_at (Printf.sprintf "%s?db=%s" path influxdb_name) in
   post ~uri ~headers ~body
 
 let testSendOneRow ctx =
@@ -254,8 +254,23 @@ let testFailingAuth ctx =
     );
   return ()
 
+let testIncorrectPath ctx =
+  let influxdb_name = "influxdb_test" in
+  let make_config db_spec = make_config db_spec ~influxdb_name ~authentication:true in
+  setup ctx ~make_config @@ fun ({ db_spec; _ } as iw2pg_context) ->
+  let body = {|meas,tag1=tag_value_1 field1="field_value_1" 1591514002000000000|} in
+  send ~path:"wrong" ctx ~body ~iw2pg_context ~influxdb_name >>= expect ~expect_code:404 >>= fun () ->
+  check_content db_spec
+    ("SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE table_name='meas'")
+    (fun results ->
+      let printer = [%derive.show: string list list] in
+      assert_equal ~printer ~msg:"Expected no data in database" [["0"]] results
+    );
+  return ()
+
 let suite = "Iw2pg" >::: [
   "testSendOneRow" >:: OUnitLwt.lwt_wrapper testSendOneRow;
   "testSendTwoRows" >:: OUnitLwt.lwt_wrapper testSendTwoRows;
   "testFailingAuth" >:: OUnitLwt.lwt_wrapper testFailingAuth;
+  "testIncorrectPath" >:: OUnitLwt.lwt_wrapper testIncorrectPath;
 ]
