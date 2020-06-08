@@ -13,7 +13,8 @@ Basically it listens in some port—8086 by default—and upon receiving a
 connection it reads all the data there is and sends the appriopriate
 `INSERT .. ON CONFLICT .. DO UPDATE SET ..` on it within a
 transaction, using `ALTER TABLE tablename ADD COLUMN ..` to add new
-columns as needed (if not using JSONB fields).
+columns as needed (if not using JSONB fields) or even add whole new
+tables with `CREATE TABLE` if so configured (so, by default).
 
 ## Why? ##
 
