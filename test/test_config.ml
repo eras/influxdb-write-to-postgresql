@@ -40,7 +40,7 @@ let _testDump _ctx =
   Config.dump config
 
 let testLoad _ctx =
-  let _config = Config.load "config.example.yaml" in
+  let _config = Config.load "doc/config.example.yaml" in
   ()
 
 let suite = "Db_config" >::: [
