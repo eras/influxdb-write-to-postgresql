@@ -26,7 +26,7 @@ joins.
 
 Currently the supported [YAML](https://yaml.org) configuration is
 minimal (JSON also supported by the YAML library, not tested
-though). Here is an [example](config.minimal.yaml) (note that this
+though). Here is an [example](doc/config.minimal.yaml) (note that this
 does not provide user authentication):
 
 ```
@@ -68,7 +68,7 @@ CREATE TABLE testtable (
 ```
 
 Putting tags in a JSONB field (default setting) provides the best
-Influxdb emulation, as iw2pg cannot create new tags fields due to the
+Influxdb emulation, as IW2PG cannot create new tags fields due to the
 problem of it requiring recreating the index whenever a new field is
 added; however if it is fine to limit the set of fields beforehand,
 then that may provide the nicest SQL query experience.
@@ -88,7 +88,7 @@ CREATE TABLE testtable (
 );
 ```
 
-Even when putting fields as separate fields is iw2pg able to add new
+Even when putting fields as separate fields is IW2PG able to add new
 fields by issuing `ALTER TABLE testtable ADD COLUMN ..`, which is fast
 because the values are `NULL`able and thus doesn't require rewriting
 the table columns in modern PostgreSQL.
@@ -131,10 +131,10 @@ required for persisting data.
 
 Supported command line parameters and their environment variable versions:
 
-| Environment variable | Command-line switch | |
-|----
-| IW2PG\_PORT | -p n --port n | Set the TCP port or Unix Domain Socket to listen on. |
-| IW2PG\_CONFIG | -c file.yaml --config file.yaml | Set the configuration file. |
+| Environment variable | Command-line switch             | Description                                           |
+|----------------------|---------------------------------|-------------------------------------------------------|
+| IW2PG\_PORT          | -p n --port n                   | Set the TCP port or Unix Domain Socket to listen on.  |
+| IW2PG\_CONFIG        | -c file.yaml --config file.yaml | Set the configuration file.                           |
 
 The container also supports the `--help` switch:
 
@@ -147,7 +147,7 @@ docker run --rm iw2pg --help
 Written in OCaml. Read the Dockerfile for exact dependencies (so the
 list of required apt and opam packages); use `dune build` to build.
 
-Run tests with `dune test`. It requires docker to run the image
+Run tests with `dune runtest`. It requires docker to run the image
 [`timescale/timescaledb:latest-pg11`](https://hub.docker.com/r/timescale/timescaledb/).
 
 ## Running tests ##

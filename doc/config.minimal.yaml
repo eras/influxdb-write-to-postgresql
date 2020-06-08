@@ -2,7 +2,7 @@
 
 databases:
   somedb:
-    db_host: port0.mf
+    db_host: dbserver1
     db_port: 5432
     db_name: test
     db_user: user42
