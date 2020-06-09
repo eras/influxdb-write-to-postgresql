@@ -23,12 +23,19 @@ type error = Invalid_database_name of string
 
 exception Error of error
 
-let validate_char ch =
-  if not (Common.is_unquoted_ascii (Uchar.of_char ch)) then
+let validate cond =
+  if not cond then
     raise (Error (Invalid_database_name ""))
 
+let validate_char ~first ch =
+  validate (Common.is_unquoted_ascii ~first (Uchar.of_char ch))
+
 let validate_name name =
-  try String.iter validate_char name; name
+  try
+    validate (String.length name > 0);
+    validate_char ~first:false name.[0];
+    String.iter (validate_char ~first:false) name;
+    name
   with Error (Invalid_database_name _) ->
     raise (Error (Invalid_database_name name))
 
