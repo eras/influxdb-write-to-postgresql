@@ -27,10 +27,10 @@ CREATE UNIQUE INDEX meas_time_idx ON meas(time, moi1, moi2);
   Test_utils.with_db_writer ctx ~schema @@ fun { db; _ } ->
   let db = Lazy.force db in
   let meas =
-    Lexer.make_measurement
+    Influxdb_lexer.make_measurement
       ~measurement:"meas"
       ~tags:[("moi1", "1");("moi2", "2")]
-      ~fields:[("value", Lexer.Int 42L)]
+      ~fields:[("value", Influxdb_lexer.Int 42L)]
       ~time:(Some 1590329952000000000L)
   in
   let query = Db_writer.Internal.insert_of_measurement db meas in
@@ -56,13 +56,13 @@ CREATE UNIQUE INDEX meas_time_idx ON meas(time, moi1, moi2);
   Test_utils.with_db_writer ctx ~schema @@ fun { db; _ } ->
   let db = Lazy.force db in
   let meas =
-    Lexer.make_measurement
+    Influxdb_lexer.make_measurement
       ~measurement:"meas"
       ~tags:[("moi1", "");("moi2", "2")]
-      ~fields:[("k_int", Lexer.Int 42L);
-               ("k_float", Lexer.FloatNum 42.0);
-               ("k_string", Lexer.String "42");
-               ("k_bool", Lexer.Boolean true);]
+      ~fields:[("k_int", Influxdb_lexer.Int 42L);
+               ("k_float", Influxdb_lexer.FloatNum 42.0);
+               ("k_string", Influxdb_lexer.String "42");
+               ("k_bool", Influxdb_lexer.Boolean true);]
       ~time:(Some 1590329952000000000L)
   in
   let { Db_writer.Internal.md_command = query; md_table_info = table_info; _ } =
@@ -101,13 +101,13 @@ CREATE UNIQUE INDEX meas_time_idx ON meas(time, moi1, moi2);
   Test_utils.with_db_writer ~make_config ctx ~schema @@ fun { db; _ } ->
   let db = Lazy.force db in
   let meas =
-    Lexer.make_measurement
+    Influxdb_lexer.make_measurement
       ~measurement:"meas"
       ~tags:[("moi1", "");("moi2", "2")]
-      ~fields:[("k_int", Lexer.Int 42L);
-               ("k_float", Lexer.FloatNum 42.0);
-               ("k_string", Lexer.String "42");
-               ("k_bool", Lexer.Boolean true);]
+      ~fields:[("k_int", Influxdb_lexer.Int 42L);
+               ("k_float", Influxdb_lexer.FloatNum 42.0);
+               ("k_string", Influxdb_lexer.String "42");
+               ("k_bool", Influxdb_lexer.Boolean true);]
       ~time:(Some 1590329952000000000L)
   in
   let { Db_writer.Internal.md_command = query; md_table_info = table_info; _ } =
@@ -132,10 +132,10 @@ CREATE UNIQUE INDEX meas_time_idx ON meas(time, moi1, moi2);
   Test_utils.with_db_writer ctx ~schema @@ fun { db; _ } ->
   let db = Lazy.force db in
   let meas =
-    Lexer.make_measurement
+    Influxdb_lexer.make_measurement
       ~measurement:"meas"
       ~tags:[("moi1", "1");("moi2", "2")]
-      ~fields:[("value", Lexer.Int 42L)]
+      ~fields:[("value", Influxdb_lexer.Int 42L)]
       ~time:None
   in
   let query = Db_writer.Internal.insert_of_measurement db meas in
@@ -163,10 +163,10 @@ CREATE UNIQUE INDEX meas_time_idx ON meas(time, tags);
   Test_utils.with_db_writer ~make_config ctx ~schema @@ fun { db; _ } ->
   let db = Lazy.force db in
   let meas =
-    Lexer.make_measurement
+    Influxdb_lexer.make_measurement
       ~measurement:"meas"
       ~tags:[("moi1", "1");("moi2", "2")]
-      ~fields:[("value", Lexer.Int 42L)]
+      ~fields:[("value", Influxdb_lexer.Int 42L)]
       ~time:(Some 1590329952000000000L)
   in
   let query = Db_writer.Internal.insert_of_measurement db meas in
@@ -193,10 +193,10 @@ CREATE UNIQUE INDEX meas_time_idx ON meas(time, moi1, moi2);
   Test_utils.with_db_writer ~make_config ctx ~schema @@ fun { db; _ } ->
   let db = Lazy.force db in
   let meas =
-    Lexer.make_measurement
+    Influxdb_lexer.make_measurement
       ~measurement:"meas"
       ~tags:[("moi1", "1");("moi2", "2")]
-      ~fields:[("value", Lexer.Int 42L)]
+      ~fields:[("value", Influxdb_lexer.Int 42L)]
       ~time:(Some 1590329952000000000L)
   in
   let query = Db_writer.Internal.insert_of_measurement db meas in
@@ -237,10 +237,10 @@ let testWriteBase ?(duplicate_write=false) ?json_tags ?json_fields ?make_config 
   Test_utils.with_db_writer ?make_config ctx ?schema @@ fun { db; db_spec } ->
   let db = Lazy.force db in
   let meas =
-    Lexer.make_measurement
+    Influxdb_lexer.make_measurement
       ~measurement:"meas"
       ~tags:[("moi1", "1");("moi2", "2")]
-      ~fields:[("value", Lexer.Int 42L)]
+      ~fields:[("value", Influxdb_lexer.Int 42L)]
       ~time:(Some 1590329952000000000L)
   in
   (try
@@ -359,27 +359,27 @@ let testWriteMultiBase ?json_tags ?json_fields ?make_config ?schema ctx =
        Printf.ksprintf assert_failure "Db_writer error in sequence %s: %s" label (Db_writer.string_of_error error))
   in
   test_sequence "1"
-    [Lexer.make_measurement
+    [Influxdb_lexer.make_measurement
        ~measurement:"meas"
        ~tags:[("moi1", "1");("moi2", "2")]
-       ~fields:[("value", Lexer.Int 42L)]
+       ~fields:[("value", Influxdb_lexer.Int 42L)]
        ~time:(Some 1590329952000000000L);
-     Lexer.make_measurement
+     Influxdb_lexer.make_measurement
        ~measurement:"meas"
        ~tags:[("moi1", "1");("moi2", "2")]
-       ~fields:[("value", Lexer.Int 42L)]
+       ~fields:[("value", Influxdb_lexer.Int 42L)]
        ~time:(Some 1590329952000000000L)]
     [(1590329952.0, "1", "2", "42")];
   test_sequence "2"
-    [Lexer.make_measurement
+    [Influxdb_lexer.make_measurement
        ~measurement:"meas"
        ~tags:[("moi1", "1")]
-       ~fields:[("value", Lexer.Int 43L)]
+       ~fields:[("value", Influxdb_lexer.Int 43L)]
        ~time:(Some 1590329952000000000L);
-     Lexer.make_measurement
+     Influxdb_lexer.make_measurement
        ~measurement:"meas"
        ~tags:[("moi2", "2")]
-       ~fields:[("value", Lexer.Int 44L)]
+       ~fields:[("value", Influxdb_lexer.Int 44L)]
        ~time:(Some 1590329952000000000L)]
     [(1590329952.0, "1", "2", "42");
      (1590329952.0, "1", "",  "43");
@@ -452,10 +452,10 @@ CREATE UNIQUE INDEX meas_time_idx ON meas(time, moi1, moi2);
   Test_utils.with_db_writer ctx ~schema @@ fun { db; db_spec } ->
   let db = Lazy.force db in
   let meas =
-    Lexer.make_measurement
+    Influxdb_lexer.make_measurement
       ~measurement:"meas"
       ~tags:[("moi1", "1");("moi2", "2")]
-      ~fields:[("value", Lexer.Int 42L)]
+      ~fields:[("value", Influxdb_lexer.Int 42L)]
       ~time:None
   in
   (try
@@ -492,10 +492,10 @@ CREATE UNIQUE INDEX meas_time_idx ON meas(time, tags);
   Test_utils.with_db_writer ~make_config ctx ~schema @@ fun { db; db_spec } ->
   let db = Lazy.force db in
   let meas =
-    Lexer.make_measurement
+    Influxdb_lexer.make_measurement
       ~measurement:"meas"
       ~tags:[("moi1", "1");("moi2", "2")]
-      ~fields:[("value", Lexer.Int 42L)]
+      ~fields:[("value", Influxdb_lexer.Int 42L)]
       ~time:(Some 1590329952000000000L)
   in
   (try
@@ -531,10 +531,10 @@ CREATE UNIQUE INDEX meas_time_idx ON meas(time, moi1, moi2);
   Test_utils.with_db_writer ~make_config ctx ~schema @@ fun { db; db_spec } ->
   let db = Lazy.force db in
   let meas =
-    Lexer.make_measurement
+    Influxdb_lexer.make_measurement
       ~measurement:"meas"
       ~tags:[("moi1", "1");("moi2", "2")]
-      ~fields:[("value", Lexer.Int 42L)]
+      ~fields:[("value", Influxdb_lexer.Int 42L)]
       ~time:(Some 1590329952000000000L)
   in
   (try

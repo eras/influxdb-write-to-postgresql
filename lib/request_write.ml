@@ -6,12 +6,12 @@ let handle_write_request body db =
   body |> Cohttp_lwt.Body.to_string >|= fun body ->
   let rec try_write retries =
     try
-      let measurements = Lexer.lines (Sedlexing.Utf8.from_string body) in
+      let measurements = Influxdb_lexer.lines (Sedlexing.Utf8.from_string body) in
       Db_writer.write db measurements;
       `Ok measurements
     with
-    | Lexer.Error error ->
-      `Error ("lexer error: " ^ Lexer.string_of_error error)
+    | Influxdb_lexer.Error error ->
+      `Error ("lexer error: " ^ Influxdb_lexer.string_of_error error)
     | Db_writer.Error (Db_writer.PgError (Postgresql.Connection_failure message, None)) ->
       if retries > 0 then (
         Db_writer.reconnect db;

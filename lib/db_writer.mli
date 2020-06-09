@@ -52,7 +52,7 @@ val reconnect : t -> unit
 (** [write t measurements] writes measurements to the database, all in one transaction.
 
     Can raise PgError *)
-val write : t -> Lexer.measurement list -> unit
+val write : t -> Influxdb_lexer.measurement list -> unit
 
 val db_spec_of_database : Config.database -> db_spec
 
@@ -84,7 +84,7 @@ module Internal: sig
   val new_pg_connection : db_spec -> Pg.connection
   val db_of_identifier : string -> string
   val db_of_field_type : field_type -> string
-  val insert_of_measurement : t -> Lexer.measurement -> string * string array
+  val insert_of_measurement : t -> Influxdb_lexer.measurement -> string * string array
   val query_database_info : Pg.connection -> database_info
 
   type made_table = {
@@ -92,5 +92,5 @@ module Internal: sig
     md_table_info : table_info;
     md_update_pks : string list list TableMap.t -> string list list TableMap.t;
   }
-  val make_table_command : t -> Lexer.measurement -> made_table
+  val make_table_command : t -> Influxdb_lexer.measurement -> made_table
 end

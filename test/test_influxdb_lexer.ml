@@ -1,6 +1,6 @@
 open OUnit2
 
-module Lexer = Influxdb_write_to_postgresql.Lexer
+module Lexer = Influxdb_write_to_postgresql.Influxdb_lexer
 
 let flip f a b = f b a
     

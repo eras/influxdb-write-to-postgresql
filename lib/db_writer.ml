@@ -60,10 +60,10 @@ struct
     | name                -> FT_Unknown name
 
   let field_type_of_value = function
-    | Lexer.String _   -> FT_String
-    | Lexer.Int _      -> FT_Int
-    | Lexer.FloatNum _ -> FT_Float
-    | Lexer.Boolean _  -> FT_Boolean
+    | Influxdb_lexer.String _   -> FT_String
+    | Influxdb_lexer.Int _      -> FT_Int
+    | Influxdb_lexer.FloatNum _ -> FT_Float
+    | Influxdb_lexer.Boolean _  -> FT_Boolean
 
   type table_name = string
 
@@ -128,14 +128,14 @@ struct
     with Common.Error Common.MalformedUTF8 ->
       raise (Error MalformedUTF8)
 
-  let db_tags (meas : Lexer.measurement) =
+  let db_tags (meas : Influxdb_lexer.measurement) =
     List.map fst meas.tags |> List.map db_of_identifier
 
-  let db_fields (meas : Lexer.measurement) =
+  let db_fields (meas : Influxdb_lexer.measurement) =
     List.map fst meas.fields |> List.map db_of_identifier
 
   let db_raw_of_value =
-    let open Lexer in
+    let open Influxdb_lexer in
     function
     | String x -> x
     | Int x -> Int64.to_string x
@@ -143,7 +143,7 @@ struct
     | Boolean true -> "true"
     | Boolean false -> "false"
 
-  let db_insert_tag_values t (meas : Lexer.measurement) =
+  let db_insert_tag_values t (meas : Influxdb_lexer.measurement) =
     match t.config.tags_column with
     | None ->
       meas.tags |> List.map (fun (_, value) -> db_raw_of_value (String value))
@@ -156,13 +156,13 @@ struct
           )
         ) |> Yojson.Basic.to_string]
 
-  let json_of_value : Lexer.value -> Yojson.t = function
-    | Lexer.String x -> `String x
-    | Lexer.Int x -> `Intlit (Int64.to_string x)
-    | Lexer.FloatNum x -> `Float x
-    | Lexer.Boolean x -> `Bool x
+  let json_of_value : Influxdb_lexer.value -> Yojson.t = function
+    | Influxdb_lexer.String x -> `String x
+    | Influxdb_lexer.Int x -> `Intlit (Int64.to_string x)
+    | Influxdb_lexer.FloatNum x -> `Float x
+    | Influxdb_lexer.Boolean x -> `Bool x
 
-  let db_insert_field_values t (meas : Lexer.measurement) =
+  let db_insert_field_values t (meas : Influxdb_lexer.measurement) =
     match t.config.fields_column with
     | None ->
       meas.fields |> List.map (fun (_, field) -> db_raw_of_value field)
@@ -190,7 +190,7 @@ struct
     | None -> db_fields meas
     | Some name -> [db_of_identifier name]
 
-  let db_insert_values t (meas : Lexer.measurement) =
+  let db_insert_values t (meas : Influxdb_lexer.measurement) =
     let with_enumerate first els =
       let (result, next) =
         (List.fold_left (
@@ -243,12 +243,12 @@ struct
       db_of_identifier meas.measurement ^ "." ^ db_of_identifier fields ^ "||" ^
       "excluded." ^ db_of_identifier fields
 
-  let conflict_tags t (meas : Lexer.measurement) =
+  let conflict_tags t (meas : Influxdb_lexer.measurement) =
     match TableMap.find_opt meas.measurement t.indices with
     | None | Some [] -> raise (Error (NoPrimaryIndexFound meas.measurement))
     | Some (index::_rest) -> index
 
-  let insert_of_measurement t (meas : Lexer.measurement) =
+  let insert_of_measurement t (meas : Influxdb_lexer.measurement) =
     let query =
       "INSERT INTO " ^ db_of_identifier meas.measurement ^
       "(" ^ db_concat (db_insert_fields t meas) ^ ")" ^
@@ -316,10 +316,10 @@ struct
       new Pg.connection ~host:db_host ~port:(string_of_int db_port) ~user:db_user ~password:db_password ~dbname:db_name ()
     | DbConnInfo conninfo -> new Pg.connection ~conninfo ()
 
-  let db_fields_and_types (measurement : Lexer.measurement) =
+  let db_fields_and_types (measurement : Influxdb_lexer.measurement) =
     List.map (fun (name, value) -> (name, field_type_of_value value)) measurement.fields
 
-  let db_tags_and_types (measurement : Lexer.measurement) =
+  let db_tags_and_types (measurement : Influxdb_lexer.measurement) =
     List.map (fun (name, _) -> (name, FT_String)) measurement.tags
 
   type made_table = {
@@ -328,7 +328,7 @@ struct
     md_update_pks : string list list TableMap.t -> string list list TableMap.t;
   }
 
-  let make_table_command (t : t) (measurement : Lexer.measurement) : made_table =
+  let make_table_command (t : t) (measurement : Influxdb_lexer.measurement) : made_table =
     let table_name = measurement.measurement in
     let dbify (name, type_) = (db_of_identifier name, db_of_field_type type_) in
     let field_columns =
@@ -478,7 +478,7 @@ let check_and_update_columns ~kind t table_name values =
   | _, `Tags, Some _, _ ->
     () (* these are inside a json and will be added dynamically *)
 
-let check_and_update_tables (t : t) (measurement : Lexer.measurement) =
+let check_and_update_tables (t : t) (measurement : Influxdb_lexer.measurement) =
   let table_name = measurement.measurement in
   if Hashtbl.mem t.database_info table_name then
     ()
@@ -508,7 +508,7 @@ let check_and_update_tables (t : t) (measurement : Lexer.measurement) =
     | Some _ -> raise (Error (CannotCreateTable { value = table_name;
                                                   reason = "table does not match the regexp" }))
 
-let write t (measurements: Lexer.measurement list) =
+let write t (measurements: Influxdb_lexer.measurement list) =
   try
     ignore (t.db#exec ~expect:[Pg.Command_ok] "BEGIN TRANSACTION");
     (* TODO: group requests by their parameters and use multi-value inserts *)
