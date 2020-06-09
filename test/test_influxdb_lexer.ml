@@ -36,7 +36,7 @@ let testOnlyTag _ctx =
 let testMissingMeasurement1 _ctx =
   let open Lexer in
   flip assert_raises (fun () ->
-      line (Sedlexing.Utf8.from_string {|id=42 field=42 1234|})
+      line (Sedlexing.Utf8.from_string {|id=42 field=42i 1234|})
     )
     (* TODO: why not measurement? *)
     (Error {info=Parse_error; message="Expected fields"})
@@ -44,13 +44,13 @@ let testMissingMeasurement1 _ctx =
 let testMissingMeasurement2 _ctx =
   let open Lexer in
   flip assert_raises (fun () ->
-      line (Sedlexing.Utf8.from_string {|,id=42 field=42 1234|})
+      line (Sedlexing.Utf8.from_string {|,id=42 field=42i 1234|})
     )
     (Error {info=Parse_error; message="Expected measurement name (table)"})
 
 let testOnlyFieldInt _ctx =
   let open Lexer in
-  let meas = line (Sedlexing.Utf8.from_string {|meas field=42 1234|}) in
+  let meas = line (Sedlexing.Utf8.from_string {|meas field=42i 1234|}) in
   flip assert_equal meas.measurement "meas";
   flip assert_equal meas.tags [];
   flip assert_equal meas.fields [("field", Int 42L)];
@@ -79,7 +79,7 @@ let testOnlyFieldString _ctx =
 let testTagField _ctx =
   let open Lexer in
   let meas = 
-    line (Sedlexing.Utf8.from_string {|meas,id=55 field=42 1234|})
+    line (Sedlexing.Utf8.from_string {|meas,id=55 field=42i 1234|})
   in
   flip assert_equal meas.measurement "meas";
   flip assert_equal meas.tags [("id", "55")];
@@ -90,7 +90,7 @@ let testTagField _ctx =
 let testTagFieldNoTime _ctx =
   let open Lexer in
   let meas = 
-    line (Sedlexing.Utf8.from_string {|meas,id=55 field=42|})
+    line (Sedlexing.Utf8.from_string {|meas,id=55 field=42i|})
   in
   flip assert_equal meas.measurement "meas";
   flip assert_equal meas.tags [("id", "55")];
@@ -100,7 +100,7 @@ let testTagFieldNoTime _ctx =
 let testTagFields _ctx =
   let open Lexer in
   let meas = 
-    line (Sedlexing.Utf8.from_string {|meas,id=55 field="moi",field2=44 1234|})
+    line (Sedlexing.Utf8.from_string {|meas,id=55 field="moi",field2=44i 1234|})
   in
   flip assert_equal meas.measurement "meas";
   flip assert_equal meas.tags [("id", "55")];
@@ -110,7 +110,7 @@ let testTagFields _ctx =
 let testTagsFields _ctx =
   let open Lexer in
   let meas = 
-    line (Sedlexing.Utf8.from_string {|meas,id=55,borf="plop" field="moi",field2=44 1234|})
+    line (Sedlexing.Utf8.from_string {|meas,id=55,borf="plop" field="moi",field2=44i 1234|})
   in
   flip assert_equal meas.measurement "meas";
   flip assert_equal meas.tags [("id", "55"); ("borf", {|"plop"|})];
@@ -120,7 +120,7 @@ let testTagsFields _ctx =
 let testTagQuoting _ctx =
   let open Lexer in
   let meas = 
-    line (Sedlexing.Utf8.from_string {|meas,id="55\,42\\\=" field="moi",field2=44 1234|})
+    line (Sedlexing.Utf8.from_string {|meas,id="55\,42\\\=" field="moi",field2=44i 1234|})
   in
   flip assert_equal meas.measurement "meas";
   flip assert_equal meas.tags [("id", {|"55,42\="|})];

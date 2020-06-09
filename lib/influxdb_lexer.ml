@@ -46,8 +46,9 @@ let identifier = [%sedlex.regexp? first_letter, Star other_letter]
 let boolean = [%sedlex.regexp? "true" | "false"]
 let string = [%sedlex.regexp? '"', (Star (Sub(any, ('\\' | '"')) | ('\\', ('\\' | '"')))), '"']
 let integer = [%sedlex.regexp? Plus digit]
-let float = [%sedlex.regexp? Plus digit, ".", Star digit]
-(* let value = [%sedlex.regexp? integer | string | float | boolean] *)
+let integer_suffix = [%sedlex.regexp? integer, "i"]
+let float = [%sedlex.regexp? Plus digit, Opt (".", Star digit)]
+(* let value = [%sedlex.regexp? integer_suffix | string | float | boolean] *)
 
 type error_info = Parse_error
 
@@ -135,9 +136,11 @@ let string str =
   unquote_field_value (Sedlexing.Utf8.from_string (String.sub str 1 (String.length str - 2)))
 
 let value buf =
-  (* let value = [%sedleex.regexp? integer | string | float | boolean] *)
+  (* let value = [%sedleex.regexp? integer_suffix | string | float | boolean] *)
   match%sedlex buf with
-  | integer -> Int (Int64.of_string (Sedlexing.Utf8.lexeme buf))
+  | integer_suffix ->
+    let str = Sedlexing.Utf8.lexeme buf in
+    Int (Int64.of_string (String.sub str 0 (String.length str - 1)))
   | string -> String (string (Sedlexing.Utf8.lexeme buf))
   | float -> FloatNum (Scanf.sscanf (Sedlexing.Utf8.lexeme buf) "%f" (fun x -> x))
   | boolean ->
