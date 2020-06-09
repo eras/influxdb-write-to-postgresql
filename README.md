@@ -64,7 +64,7 @@ CREATE TABLE testtable (
     time timestamptz NOT NULL,
     tags JSONB NOT NULL,          -- all the tags
     fields JSONB NOT NULL,        -- all the fields
-    UNIQUE(time, tags)
+    PRIMARY KEY(time, tags)
 );
 ```
 
@@ -85,7 +85,7 @@ CREATE TABLE testtable (
     location STRING NOT NULL,     -- tag
     temperature DOUBLE PRECISION, -- field
     co2 DOUBLE PRECISION,         -- field
-    UNIQUE(time, id, location)    -- list time and all the tags
+    PRIMARY KEY(time, id, location)    -- list time and all the tags
 );
 ```
 
