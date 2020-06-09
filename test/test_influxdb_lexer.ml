@@ -8,14 +8,14 @@ let testEmpty _ctx =
   let open Lexer in
   flip assert_raises (fun () ->
       line (Sedlexing.Utf8.from_string {||})
-    ) (Error {info=Parse_error; message="line"}) 
+    ) (Error {info=Parse_error; message="Expected measurement name (table)"})
 
 let testOnlyMeasurement _ctx =
   let open Lexer in
   flip assert_raises (fun () ->
       line (Sedlexing.Utf8.from_string {|meas|})
     )
-    (Error {info=Parse_error; message="fields"})
+    (Error {info=Parse_error; message="Expected fields"})
     
 let testOnlyMeasurementTime _ctx =
   let open Lexer in
@@ -23,7 +23,7 @@ let testOnlyMeasurementTime _ctx =
       line (Sedlexing.Utf8.from_string {|meas 1234|})
     )
     (* TODO: what? why not comma? *)
-    (Error {info=Parse_error; message="equal sign"})
+    (Error {info=Parse_error; message="Expected equal sign; received <>"})
 
 let testOnlyTag _ctx =
   let open Lexer in
@@ -31,7 +31,7 @@ let testOnlyTag _ctx =
       line (Sedlexing.Utf8.from_string {|meas,tag=42 1234|})
     )
     (* TODO: what? why not fields? *)
-    (Error {info=Parse_error; message="equal sign"})
+    (Error {info=Parse_error; message="Expected equal sign; received <>"})
 
 let testMissingMeasurement1 _ctx =
   let open Lexer in
@@ -39,14 +39,14 @@ let testMissingMeasurement1 _ctx =
       line (Sedlexing.Utf8.from_string {|id=42 field=42 1234|})
     )
     (* TODO: why not measurement? *)
-    (Error {info=Parse_error; message="fields"})
+    (Error {info=Parse_error; message="Expected fields"})
 
 let testMissingMeasurement2 _ctx =
   let open Lexer in
   flip assert_raises (fun () ->
       line (Sedlexing.Utf8.from_string {|,id=42 field=42 1234|})
     )
-    (Error {info=Parse_error; message="line"})
+    (Error {info=Parse_error; message="Expected measurement name (table)"})
 
 let testOnlyFieldInt _ctx =
   let open Lexer in

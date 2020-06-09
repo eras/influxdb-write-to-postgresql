@@ -77,7 +77,7 @@ let _ = Printexc.register_printer (function
 let identifier buf =
   match%sedlex buf with
   | identifier -> (Sedlexing.Utf8.lexeme buf)
-  | _ -> log_raise (Error {info = Parse_error; message = "identifier"})
+  | _ -> log_raise (Error {info = Parse_error; message = "Expected identifier; received <" ^ Sedlexing.Utf8.lexeme buf ^ ">"})
 
 (* let tag_value = [%sedlex.regexp? (Star (Sub(any, ('\\' | ' ' | '=' | ',')) | ('\\', ('\\' | ' ' | '=' | ','))))] *)
 let unquote_tag_value buf =
@@ -87,7 +87,7 @@ let unquote_tag_value buf =
     | Star (Sub(any, ('\\' | ' ' | '=' | ','))) ->
       Buffer.add_string out (Sedlexing.Utf8.lexeme buf);
       quoted ()
-    | _ -> log_raise (Error {info = Parse_error; message = "tag value"})
+    | _ -> log_raise (Error {info = Parse_error; message = "Expected tag value; received <" ^ Sedlexing.Utf8.lexeme buf ^ ">"})
   and quoted () =
      match%sedlex buf with
       | '\\', ('\\' | ' ' | '=' | ',') ->
@@ -108,7 +108,7 @@ let unquote_field_value buf =
     | Star (Sub(any, ('\\' | '"'))) ->
       Buffer.add_string out (Sedlexing.Utf8.lexeme buf);
       quoted ()
-    | _ -> log_raise (Error {info = Parse_error; message = "field value"})
+    | _ -> log_raise (Error {info = Parse_error; message = "Expected field value; received <" ^ Sedlexing.Utf8.lexeme buf ^ ">"})
   and quoted () =
      match%sedlex buf with
       | '\\', ('\\' | '"') ->
@@ -124,12 +124,12 @@ let unquote_field_value buf =
 let tag_value buf =
   match%sedlex buf with
   | tag_value -> unquote_tag_value (Sedlexing.Utf8.from_string (Sedlexing.Utf8.lexeme buf))
-  | _ -> log_raise (Error {info = Parse_error; message = "tag value"})
+  | _ -> log_raise (Error {info = Parse_error; message = "Expected tag value; received <" ^ Sedlexing.Utf8.lexeme buf ^ ">"})
 
 let equals buf =
   match%sedlex buf with
   | '=' -> (Sedlexing.Utf8.lexeme buf)
-  | _ -> log_raise (Error {info = Parse_error; message = "equal sign"})
+  | _ -> log_raise (Error {info = Parse_error; message = "Expected equal sign; received <" ^ Sedlexing.Utf8.lexeme buf ^ ">"})
 
 let string str =
   unquote_field_value (Sedlexing.Utf8.from_string (String.sub str 1 (String.length str - 2)))
@@ -145,7 +145,7 @@ let value buf =
      | "true" -> Boolean true
      | "false" -> Boolean false
      | _ -> assert false)
-  | _ -> log_raise (Error {info = Parse_error; message = "value"})
+  | _ -> log_raise (Error {info = Parse_error; message = "Expected value; received <" ^ Sedlexing.Utf8.lexeme buf ^ ">"})
 
 let tags buf =
   let rec loop fields =
@@ -175,13 +175,15 @@ let fields buf =
       | _ -> List.rev fields
     in
     loop []
-  | _ -> log_raise (Error {info = Parse_error; message = "fields"})
+  | _ -> log_raise (Error {info = Parse_error; message = "Expected fields"})
 
 let time buf =
   match%sedlex buf with
   | " ", integer ->
     let str = Sedlexing.Utf8.lexeme buf in
     Some (Int64.of_string (String.sub str 1 (String.length str - 1)))
+  | " " ->
+    log_raise (Error {info = Parse_error; message = "Expected time"})
   | _ -> None (* last field, so we may need to encounter newline as well *)
 
 let rest buf =
@@ -200,7 +202,7 @@ let line buf =
   match%sedlex buf with
   | identifier ->
     rest buf
-  | _ -> log_raise (Error {info = Parse_error; message = "line"})
+  | _ -> log_raise (Error {info = Parse_error; message = "Expected measurement name (table)"})
 
 let lines buf =
   let rec loop aux =
@@ -210,10 +212,11 @@ let lines buf =
       let aux = field::aux in
       ( match%sedlex buf with
         | '\n' -> loop aux
-        | any -> log_raise (Error {info = Parse_error; message = "lines"})
-        | _ -> List.rev aux )
+        | eof -> List.rev aux
+        | _ -> log_raise (Error {info = Parse_error; message = "A new entry expected; received <" ^ Sedlexing.Utf8.lexeme buf ^ ">"})
+      )
     | eof -> List.rev aux
-    | _ -> log_raise (Error {info = Parse_error; message = "lines"})
+    | _ -> log_raise (Error {info = Parse_error; message = "End of data expected; received <" ^ Sedlexing.Utf8.lexeme buf ^ ">"})
   in
   loop []
 
