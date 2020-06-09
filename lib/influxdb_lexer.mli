@@ -3,6 +3,7 @@ type value =
   | Int of int64
   | FloatNum of float
   | Boolean of bool
+[@@deriving show]
 
 type measurement = private {
   measurement: string;

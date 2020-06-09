@@ -3,6 +3,7 @@ type value =
   | Int of int64
   | FloatNum of float
   | Boolean of bool
+[@@deriving show]
 
 let string_of_value = function
   | String x -> x

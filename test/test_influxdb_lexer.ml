@@ -48,6 +48,33 @@ let testMissingMeasurement2 _ctx =
     )
     (Error {info=Parse_error; message="Expected measurement name (table)"})
 
+let testTypes _ctx =
+  let open Lexer in
+  let meas = line (Sedlexing.Utf8.from_string {|meas integer=1i,float1=1,float2=1.,float3=1.0,float4=1.00,bool1=f,bool2=F,bool3=false,bool4=False,bool5=FALSE,bool6=t,bool7=T,bool8=true,bool9=True,bool10=TRUE,string1="",string2=" ",string3="\""|}) in
+  flip assert_equal meas.measurement "meas";
+  flip assert_equal meas.tags [];
+  assert_equal ~printer:[%derive.show: (string * value) list] [
+    ("integer", Int 1L);
+    ("float1", FloatNum 1.0);
+    ("float2", FloatNum 1.0);
+    ("float3", FloatNum 1.0);
+    ("float4", FloatNum 1.0);
+    ("bool1", Boolean false);
+    ("bool2", Boolean false);
+    ("bool3", Boolean false);
+    ("bool4", Boolean false);
+    ("bool5", Boolean false);
+    ("bool6", Boolean true);
+    ("bool7", Boolean true);
+    ("bool8", Boolean true);
+    ("bool9", Boolean true);
+    ("bool10", Boolean true);
+    ("string1", String "");
+    ("string2", String " ");
+    ("string3", String "\"");
+  ] meas.fields;
+  flip assert_equal meas.time None
+
 let testOnlyFieldInt _ctx =
   let open Lexer in
   let meas = line (Sedlexing.Utf8.from_string {|meas field=42i 1234|}) in
@@ -182,6 +209,7 @@ let suite = "Infludb_writer_lexer" >::: [
   "testOnlyMeasurement" >:: testOnlyMeasurement;
   "testOnlyMeasurementTime" >:: testOnlyMeasurementTime;
   "testOnlyTag" >:: testOnlyTag;
+  "testTypes" >:: testTypes;
   "testMissingMeasurement1" >:: testMissingMeasurement1;
   "testMissingMeasurement2" >:: testMissingMeasurement2;
   "testOnlyFieldInt" >:: testOnlyFieldInt;
