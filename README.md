@@ -6,6 +6,8 @@ License: MIT
 
 IW2PG is a service for receiving inbound [Influxdb line
 protocol](https://v2.docs.influxdata.com/v2.0/reference/syntax/line-protocol/)
+via simple [HTTP
+POST](https://docs.influxdata.com/influxdb/v1.8/guides/write_data/)
 and converting it to `INSERT` commands to a PostgreSQL database; and
 by extension to a [TimeScaleDB](https://www.timescale.com/).
 
