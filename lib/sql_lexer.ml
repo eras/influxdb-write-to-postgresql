@@ -35,6 +35,7 @@ let string_of_token = function
   | EQUAL -> "="
   | RELOP_NE -> "<>"
   | BINOP str -> str
+  | CAST -> "::"
   | END -> ";"
 
 type error =

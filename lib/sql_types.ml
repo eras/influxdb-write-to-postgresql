@@ -7,6 +7,7 @@ type expression =
   | E_Identifier of string
   | E_FunCall of string * expression list
   | E_RelOp of expression * string * expression
+  | E_Cast of expression * string
 
 type index_field =
   [`Column of string
@@ -50,3 +51,5 @@ let rec string_of_expression ?(db_of_identifier=Common.db_of_identifier) =
     db_of_identifier func ^ "(" ^ String.concat ", " (List.map string_of_expression expressions) ^ ")"
   | E_RelOp (a, relop, b) ->
     !(string_of_expression a) ^ " " ^ relop ^ " " ^ !(string_of_expression b)
+  | E_Cast (a, b) ->
+    !(string_of_expression a) ^ "::" ^ db_of_identifier b

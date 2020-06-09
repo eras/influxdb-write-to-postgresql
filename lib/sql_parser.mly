@@ -33,6 +33,7 @@
 %token RELOP_GTE
 %token EQUAL
 %token RELOP_NE
+%token CAST
 %token <string> BINOP
 %token <Sql_types.value> VALUE
 %token <string> IDENT
@@ -107,6 +108,8 @@ Warning: 6 shift/reduce conflicts were arbitrarily resolved.
 *)
 | a = expression; op = binop; b = expression;
   { E_RelOp (a, op, b) }
+| a = expression; CAST; b = qual_ident;
+  { E_Cast (a, b) }
 
 qual_ident:
 | ident = IDENT { ident }
