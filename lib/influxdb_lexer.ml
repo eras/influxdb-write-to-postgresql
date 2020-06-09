@@ -43,7 +43,7 @@ let other_letter = [%sedlex.regexp? first_letter | '_']
 
 let tag_value = [%sedlex.regexp? (Star (Sub(any, ('\\' | ' ' | '=' | ',')) | ('\\', ('\\' | ' ' | '=' | ','))))]
 let identifier = [%sedlex.regexp? first_letter, Star other_letter]
-let boolean = [%sedlex.regexp? "true" | "false"]
+let boolean = [%sedlex.regexp? "true" | "false" | "True" | "False" | "TRUE" | "FALSE" | 't' | 'f' | 'T' | 'F']
 let string = [%sedlex.regexp? '"', (Star (Sub(any, ('\\' | '"')) | ('\\', ('\\' | '"')))), '"']
 let integer = [%sedlex.regexp? Plus digit]
 let integer_suffix = [%sedlex.regexp? integer, "i"]
@@ -144,9 +144,9 @@ let value buf =
   | string -> String (string (Sedlexing.Utf8.lexeme buf))
   | float -> FloatNum (Scanf.sscanf (Sedlexing.Utf8.lexeme buf) "%f" (fun x -> x))
   | boolean ->
-    (match Sedlexing.Utf8.lexeme buf with
-     | "true" -> Boolean true
-     | "false" -> Boolean false
+    (match (Sedlexing.Utf8.lexeme buf).[0] with
+     | 't' | 'T' -> Boolean true
+     | 'f' | 'F' -> Boolean false
      | _ -> assert false)
   | _ -> log_raise (Error {info = Parse_error; message = "Expected value; received <" ^ Sedlexing.Utf8.lexeme buf ^ ">"})
 
