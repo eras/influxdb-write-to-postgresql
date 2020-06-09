@@ -20,7 +20,6 @@ type password = {
 }
 
 type user = {
-  token : string option;
   password : password option;
   group : string option;
   expires : float option;

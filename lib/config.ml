@@ -48,7 +48,6 @@ type password = {
 } [@@deriving yojson, show]
 
 type user = {
-  token: (string option [@default None]);
   password: password option [@default None];
   group: (string option [@default None]);
   expires: (float option [@default None]);

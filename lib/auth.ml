@@ -51,7 +51,6 @@ type context = {
 type request = {
   user : string option;
   password : string option;
-  token : string option;
 } [@@deriving show]
 let _ = pp_request              (* ignore warning *)
 
@@ -66,6 +65,7 @@ let string_of_result = function
 
 type error =
   | FailedToParseAuthorization
+  | FailedToParseAuthorizationToken
   | FailedToParseAuthorizationBasic
   | CryptokitError of Cryptokit.error
   | Argon2Error of argon2_errorcode
@@ -78,6 +78,8 @@ let string_of_error = function
     "Failed to parse authorization"
   | FailedToParseAuthorizationBasic ->
     "Failed to parse basic authorization"
+  | FailedToParseAuthorizationToken ->
+    "Failed to parse token authorization"
   | CryptokitError error -> begin
       let open Cryptokit in
       match error with
@@ -122,11 +124,11 @@ let argon2_lookup t =
 
 let auth_password_ok t (_context : context) (pw : Config.password) request =
   match pw.type_, request with
-  | Plain, { user = _; password = Some password; token = None; } ->
+  | Plain, { user = _; password = Some password } ->
     if pw.password = password
     then AuthSuccess
     else AuthFailed
-  | Argon2,  { user = _; password = Some password; token = None; } -> begin
+  | Argon2,  { user = _; password = Some password } -> begin
       match argon2_lookup t ~encoded:pw.password ~pwd:password with
       | Ok true -> AuthSuccess
       | Ok false -> AuthFailed
@@ -136,31 +138,15 @@ let auth_password_ok t (_context : context) (pw : Config.password) request =
   | (Plain | Argon2), _ ->
     AuthFailed
 
-let auth_token_ok (config : config) (token : string) =
-  List.find_map (
-    fun (user_name, config_user) ->
-      if config_user.Config.token = Some token
-      then Some (user_name, AuthSuccess)
-      else None
-  ) config.users
-
 let permitted t ~(context : context) ~(request : request) =
   let config_user_info = Option.map (fun user -> List.assoc_opt user t.config.users) request.user in
   match context.allowed_users, request, config_user_info with
-  | None, { user = None; password = None; token = None; }, _ ->
+  | None, { user = None; password = None }, _ ->
     (* If no authentication is provided and not configured, permit *)
     AuthSuccess
   | None, _, _ ->
     (* If authentication is provided but not configured, reject *)
     AuthFailed
-  | Some allowed_users,
-    ({ user = user; token = Some token; password = None; } as _request),
-    _config_user_info -> begin
-      match auth_token_ok t.config token with
-      | Some (user', result) when List.mem user' allowed_users && (user == None || (Some user' == user)) ->
-        result
-      | _ -> AuthFailed
-    end
   | Some allowed_users,
     ({ user = Some user; _ } as request),
     Some (Some { Config.password = Some password; _ }) when List.mem user allowed_users ->
@@ -173,20 +159,12 @@ let permitted t ~(context : context) ~(request : request) =
 
 type authorization =
   | Basic of (string * string)
-  | Token of string
+  | Token of (string * string)
 
 let basic_char = [%sedlex.regexp? Sub(any, ('\x00'.. '\x1f' | '\x7f'))]
 
-let parse_base64_user_pass content =
-  let content =
-    try
-      let base64dec = Cryptokit.Base64.decode () in
-      base64dec#put_string content;
-      base64dec#finish;
-      base64dec#get_string;
-    with Cryptokit.Error error ->
-      raise (Error (CryptokitError error))
-  in
+(* Influxdb "token" is basic auth but without base64 🙄 *)
+let parse_token ?(exn=FailedToParseAuthorizationToken) content =
   let buf = Sedlexing.Utf8.from_string content in
   (* https://tools.ietf.org/html/rfc7617#section-2 *)
   (* https://tools.ietf.org/html/rfc5234#appendix-B.1 *)
@@ -198,10 +176,22 @@ let parse_base64_user_pass content =
       | ':', Star(basic_char) ->
         let str = Sedlexing.Utf8.lexeme buf in
         String.sub str 1 (String.length str - 1)
-      | _ -> raise (Error (FailedToParseAuthorizationBasic))
+      | _ -> raise (Error exn)
     in
     (user, password)
-  | _ -> raise (Error (FailedToParseAuthorizationBasic))
+  | _ -> raise (Error exn)
+
+let parse_base64_user_pass content =
+  let content =
+    try
+      let base64dec = Cryptokit.Base64.decode () in
+      base64dec#put_string content;
+      base64dec#finish;
+      base64dec#get_string;
+    with Cryptokit.Error error ->
+      raise (Error (CryptokitError error))
+  in
+  parse_token ~exn:FailedToParseAuthorizationBasic content
 
 let parse_authorization str =
   let buf = Sedlexing.Utf8.from_string str in
@@ -216,7 +206,7 @@ let parse_authorization str =
   | ('T' | 't'), ('O' | 'o'), ('K' | 'k'), ('E' | 'e'), ('N' | 'n'), ' ' ->
     let content =
       match%sedlex buf with
-      | Plus any -> Token (Sedlexing.Utf8.lexeme buf)
+      | Plus any -> Token (parse_token (Sedlexing.Utf8.lexeme buf))
       | _ -> raise (Error FailedToParseAuthorization)
     in
     content
@@ -228,7 +218,6 @@ let request_of_header header =
     {
       user = None;
       password = None;
-      token = None;
     }
   | Some auth ->
     match parse_authorization auth with
@@ -236,13 +225,11 @@ let request_of_header header =
       {
         user = Some user;
         password = Some password;
-        token = None;
       }
-    | Token token ->
+    | Token (user, password) ->
       {
-        user = None;
-        password = None;
-        token = Some token;
+        user = Some user;
+        password = Some password;
       }
 
 let permitted_header t ~context ~header =

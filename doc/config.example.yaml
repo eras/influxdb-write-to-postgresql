@@ -17,15 +17,6 @@ users:
       type: argon2
       password: $argon2i$v=19$m=4096,t=3,p=1$MDEyMzQ1Njc4OQ$olhpdTlEtA/vrolxbzIHZf29IsTflonzjnTDMkS7BCU
 
-  testuser3:
-    group: testgroup # optional
-    token: abcdef
-
-    # if token is provided, then client does not need to provide
-    # user name (but it still matches this user)
-
-    # token: y3y7fy78eyhueu78yhdf78yd78gy74fasdjf4ji
-
 # TODO: How to handle this in order in Yaml?
 # regexp_users:
 #   /.*/:

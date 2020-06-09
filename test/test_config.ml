@@ -4,14 +4,12 @@ open Influxdb_write_to_postgresql
 let _testDump _ctx =
   let config = Config.({
       users = ["test", {
-          token = None;
           group = None;
           password = Some { type_ = Plain; password = "" };
           expires = None;
         }];
       regexp_users = [".*", {
           group = None;
-          token = None;
           password = Some { type_ = Plain; password = "" };
           expires = None;
         }];

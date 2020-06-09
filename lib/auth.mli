@@ -13,7 +13,6 @@ type context = {
 type request = {
   user : string option;
   password : string option;
-  token : string option;
 }
 
 type result =
@@ -28,6 +27,7 @@ val string_of_result : result -> string
 
 type error =
   | FailedToParseAuthorization
+  | FailedToParseAuthorizationToken
   | FailedToParseAuthorizationBasic
   | CryptokitError of Cryptokit.error
   | Argon2Error of Argon2.ErrorCodes.t
