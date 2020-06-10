@@ -97,15 +97,6 @@ let stop_db_container id =
     let _ignore = input_line channel in
     Unix.close_process_in channel) (Unix.WEXITED 0)
 
-let valuefy f x =
-  try `Value (f x)
-  with exn -> `Exn (exn, Printexc.get_raw_backtrace ())
-
-let unvaluefy = function
-  | `Value x -> x
-  | `Exn (e, raw_backtrace) ->
-    Printexc.raise_with_backtrace e raw_backtrace
-
 let container_info = lazy (
   let container_info = create_db_container () in
   at_exit (fun () -> stop_db_container container_info.ci_id);
@@ -135,7 +126,7 @@ let retry f =
       | None -> assert false
       | Some exn -> `Exn exn
   in
-  unvaluefy (loop 10 None)
+  Common.unvaluefy (loop 10 None)
 
 let create_new_database =
   let db_id_counter = ref 0 in
@@ -193,7 +184,7 @@ let make_db_writer_config db_spec =
 let with_db_writer ?(make_config=make_db_writer_config) (ctx : OUnit2.test_ctxt) ?schema (f : Db_writer.t Lazy.t db_test_context -> 'a) : 'a =
   with_new_db ctx schema @@ fun { db_spec; _ } ->
   let db = lazy (Db_writer.create (make_config db_spec)) in
-  let ret = valuefy f { db; db_spec } in
+  let ret = Common.valuefy f { db; db_spec } in
   if Lazy.is_val db then
     Db_writer.close (Lazy.force db);
   (match ret with
@@ -203,5 +194,4 @@ let with_db_writer ?(make_config=make_db_writer_config) (ctx : OUnit2.test_ctxt)
      OUnit2.logf ctx `Error "Sql_types.Error: %s\nBacktrace: %s" (Sql_types.string_of_error error) (Printexc.raw_backtrace_to_string raw_backtrace)
    | _ -> ()
   );
-  unvaluefy ret
-
+  Common.unvaluefy ret

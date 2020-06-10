@@ -3,6 +3,15 @@ type error =
 
 exception Error of error
 
+let valuefy f x =
+  try `Value (f x)
+  with exn -> `Exn (exn, Printexc.get_raw_backtrace ())
+
+let unvaluefy = function
+  | `Value x -> x
+  | `Exn (e, raw_backtrace) ->
+    Printexc.raise_with_backtrace e raw_backtrace
+
 let is_unquoted_ascii ~first x =
   let i = Uchar.to_int x in
   if i >= 1 && i <= 127 then
