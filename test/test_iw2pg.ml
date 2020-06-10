@@ -211,7 +211,7 @@ let testSendOneRow ctx =
   let make_config db_spec = make_config db_spec ~influxdb_name ~authentication:false in
   setup ctx ~make_config @@ fun ({ db_spec; _ } as iw2pg_context) ->
   let body = {|meas,tag1=tag_value_1 field1="field_value_1" 1591514002000000000|} in
-  send ctx ~body ~iw2pg_context ~influxdb_name >>= expect ~expect_code:200 >>= fun () ->
+  send ctx ~body ~iw2pg_context ~influxdb_name >>= expect ~expect_code:204 >>= fun () ->
   check_content db_spec
     ("SELECT EXTRACT(EPOCH FROM time), tags->>'tag1', fields->>'field1' FROM meas")
     (fun results ->
@@ -227,7 +227,7 @@ let testSendTwoRows ctx =
   setup ctx ~make_config @@ fun ({ db_spec; _ } as iw2pg_context) ->
   let body = {|meas,tag1=tag_value_1 field1="field_value_1" 1591514002000000000
 meas,tag1=tag_value_1 field1="field_value_1" 1591514003000000000|} in
-  send ctx ~body ~iw2pg_context ~influxdb_name >>= expect ~expect_code:200 >>= fun () ->
+  send ctx ~body ~iw2pg_context ~influxdb_name >>= expect ~expect_code:204 >>= fun () ->
   check_content db_spec
     ("SELECT EXTRACT(EPOCH FROM time), tags->>'tag1', fields->>'field1' FROM meas")
     (fun results ->

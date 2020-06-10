@@ -12,8 +12,8 @@ type prog_config = {
 let handle_request (environment : Requests.request_environment) req body =
   let uri = req |> Cohttp.Request.uri in
   match req.meth, uri |> Uri.path with
-  | `POST, "/write" ->
-    Request_write.handle environment req body
+  | `POST, "/write" -> Request_write.handle environment req body
+  | _, "/write" -> return (`Method_not_allowed, None, "Method not supported.")
   | _ -> return (`Not_found, None, "Not found.")
 
 let make_environment prog_config : Requests.request_environment =
@@ -92,9 +92,10 @@ let server prog_config =
         handle_request environment req body
         >>= fun (status, headers, body) ->
         Server.respond_string ~status ~body () >>= fun (response, body) ->
+        let with_header header = Cohttp.Header.add header "X-Iw2pg-Version" Version.version in
         let response = match headers with
-          | None -> response
-          | Some headers -> { response with headers = headers }
+          | None -> { response with headers = with_header (Cohttp.Header.init ()) }
+          | Some headers -> { response with headers = with_header headers }
         in
         return (response, body)
       )

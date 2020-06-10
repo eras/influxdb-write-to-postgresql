@@ -24,7 +24,7 @@ let handle_write_request body db =
   in
   let results = try_write 3 in
   match results with
-  | `Ok _results -> (`OK, None, "OK")
+  | `Ok _results -> (`No_content, None, "")
   | `Error error -> (`Internal_server_error, None, error)
 
 let handle_write_setup { Requests.auth; config; db_spool } req =
