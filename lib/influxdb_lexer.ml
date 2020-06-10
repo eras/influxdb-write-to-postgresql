@@ -17,7 +17,7 @@ type measurement = {
   tags: (string * string) list;
   fields: (string * value) list;
   time: int64 option;
-}
+} [@@deriving show]
 
 let make_measurement ~measurement ~tags ~fields ~time =
   assert (measurement <> "");

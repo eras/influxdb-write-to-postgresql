@@ -10,7 +10,7 @@ type measurement = private {
   tags: (string * string) list;
   fields: (string * value) list;
   time: int64 option;
-}
+} [@@deriving show]
 
 val make_measurement :
   measurement:string ->

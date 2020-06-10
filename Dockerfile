@@ -7,6 +7,7 @@ RUN opam install -y dune lwt lwt_ppx postgresql cohttp-lwt-unix \
     sedlex postgresql ounit2 ounit2-lwt uutf yojson menhir containers \
     yaml decoders-yojson ppx_deriving_yojson cmdliner re cryptokit \
     unix-type-representations argon2 anycache git
+RUN opam install -y logs mtime
 
 COPY dune-project influxdb_write_to_postgresql.* /work/
 COPY [".git", "/work/.git"] # for version information

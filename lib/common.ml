@@ -12,6 +12,12 @@ let unvaluefy = function
   | `Exn (e, raw_backtrace) ->
     Printexc.raise_with_backtrace e raw_backtrace
 
+let time f x =
+  let t0 = Mtime_clock.elapsed () in
+  let res = valuefy f x in
+  let t1 = Mtime_clock.elapsed () in
+  (Mtime.Span.(abs_diff t0 t1), unvaluefy res)
+
 let is_unquoted_ascii ~first x =
   let i = Uchar.to_int x in
   if i >= 1 && i <= 127 then

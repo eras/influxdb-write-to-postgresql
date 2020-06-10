@@ -1,4 +1,22 @@
+module Log = (val Logs.src_log Logging.db_writer_src : Logs.LOG)
+
 module Pg = Postgresql
+
+let db_exec (db: Pg.connection) ?params ?expect query =
+  let (time, res) =
+    Common.time
+      (Common.valuefy (fun () -> db#exec ?expect ?params query))
+      ()
+  in
+  Log.debug (fun m ->
+      m "Exec %s with %s took %.1f ms"
+        ([%derive.show: string] query)
+        (match params with
+         | None -> "no parameters"
+         | Some params -> [%derive.show: string array] params)
+        (Mtime.Span.(time |> to_ms))
+    );
+  Common.unvaluefy res
 
 type quote_mode = QuoteAlways
 
@@ -313,8 +331,20 @@ struct
 
   let new_pg_connection = function
     | DbInfo { db_host; db_port; db_user; db_password; db_name } ->
+      Logs.info (fun m ->
+          m "Connecting %s:%d user %s database %s"
+            ([%derive.show: string] db_host)
+            db_port
+            ([%derive.show: string] db_user)
+            ([%derive.show: string] db_name)
+        );
       new Pg.connection ~host:db_host ~port:(string_of_int db_port) ~user:db_user ~password:db_password ~dbname:db_name ()
-    | DbConnInfo conninfo -> new Pg.connection ~conninfo ()
+    | DbConnInfo conninfo ->
+      Logs.info (fun m ->
+          m "Connecting conninfo %s"
+            ([%derive.show: string] conninfo)
+        );
+      new Pg.connection ~conninfo ()
 
   let db_fields_and_types (measurement : Influxdb_lexer.measurement) =
     List.map (fun (name, value) -> (name, field_type_of_value value)) measurement.fields
@@ -457,7 +487,7 @@ let check_and_update_columns ~kind t table_name values =
         { fields = new_columns }
       );
     missing_columns |> List.iter @@ fun (field_name, field_type) ->
-    ignore (t.db#exec ~expect:[Pg.Command_ok]
+    ignore (db_exec t.db ~expect:[Pg.Command_ok]
               (Printf.sprintf "ALTER TABLE %s ADD COLUMN IF NOT EXISTS %s %s"
                  (db_of_identifier table_name)
                  (db_of_identifier field_name)
@@ -485,14 +515,14 @@ let check_and_update_tables (t : t) (measurement : Influxdb_lexer.measurement) =
   else
     let make_table () =
       let made_table = make_table_command t measurement in
-      ignore (t.db#exec ~expect:[Pg.Command_ok] made_table.md_command);
+      ignore (db_exec t.db ~expect:[Pg.Command_ok] made_table.md_command);
       t.indices <- made_table.md_update_pks t.indices;
       Hashtbl.replace t.database_info table_name made_table.md_table_info
     in
     let make_hypertable () =
       let command = "SELECT create_hypertable($1, $2)" in
       let params = [|table_name; t.config.time_column|] in
-      ignore (t.db#exec ~expect:[Pg.Tuples_ok] ~params command)
+      ignore (db_exec t.db ~expect:[Pg.Tuples_ok] ~params command)
     in
     match t.config.create_table with
     | Some create_table when Config.matches create_table.regexp table_name -> begin
@@ -510,10 +540,13 @@ let check_and_update_tables (t : t) (measurement : Influxdb_lexer.measurement) =
 
 let write t (measurements: Influxdb_lexer.measurement list) =
   try
-    ignore (t.db#exec ~expect:[Pg.Command_ok] "BEGIN TRANSACTION");
+    ignore (db_exec t.db ~expect:[Pg.Command_ok] "BEGIN TRANSACTION");
     (* TODO: group requests by their parameters and use multi-value inserts *)
     List.iter (
-      fun measurement -> 
+      fun measurement ->
+        Log.debug (fun m ->
+            m "Measurement: %s" (Influxdb_lexer.show_measurement measurement)
+          );
         let () = check_and_update_tables t measurement in
         let (query, params) = insert_of_measurement t measurement in
         let field_types = db_fields_and_types measurement in
@@ -521,14 +554,14 @@ let write t (measurements: Influxdb_lexer.measurement list) =
         let () = check_and_update_columns ~kind:`Tags t measurement.measurement tag_types in
         let () = check_and_update_columns ~kind:`Fields t measurement.measurement field_types in
         try
-          ignore (t.db#exec ~params ~expect:[Pg.Command_ok] query);
+          ignore (db_exec t.db ~params ~expect:[Pg.Command_ok] query);
         with Pg.Error error ->
-          (try ignore (t.db#exec ~expect:[Pg.Command_ok] "ROLLBACK");
+          (try ignore (db_exec t.db ~expect:[Pg.Command_ok] "ROLLBACK");
            with Pg.Error _ -> (* ignore *) ());
           raise (Error (PgError (error, Some query)))
     ) measurements;
-    ignore (t.db#exec ~expect:[Pg.Command_ok] "COMMIT");
+    ignore (db_exec t.db ~expect:[Pg.Command_ok] "COMMIT");
   with Pg.Error error ->
-    (try ignore (t.db#exec ~expect:[Pg.Command_ok] "ROLLBACK");
+    (try ignore (db_exec t.db ~expect:[Pg.Command_ok] "ROLLBACK");
      with Pg.Error _ -> (* ignore *) ());
     raise (Error (PgError (error, None)))

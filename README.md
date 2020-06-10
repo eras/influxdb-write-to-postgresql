@@ -138,6 +138,7 @@ Supported command line parameters and their environment variable versions:
 |----------------------|---------------------------------|-------------------------------------------------------|
 | IW2PG\_PORT          | -p n --port n                   | Set the TCP port or Unix Domain Socket to listen on.  |
 | IW2PG\_CONFIG        | -c file.yaml --config file.yaml | Set the configuration file.                           |
+| IW2PG\_LOG_LEVEL     | --verbosity=quiet\|error\|warning\|info\|debug | Set logging verbosity; defaults to "warning" |
 
 The container also supports the `--help` switch:
 
