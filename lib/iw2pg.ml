@@ -11,8 +11,8 @@ type prog_config = {
 
 let handle_request (environment : Requests.request_environment) req body =
   let uri = req |> Cohttp.Request.uri in
-  match uri |> Uri.path with
-  | "/write" ->
+  match req.meth, uri |> Uri.path with
+  | `POST, "/write" ->
     Request_write.handle environment req body
   | _ -> return (`Not_found, None, "Not found.")
 
