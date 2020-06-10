@@ -92,7 +92,11 @@ let server prog_config =
         handle_request environment req body
         >>= fun (status, headers, body) ->
         Server.respond_string ~status ~body () >>= fun (response, body) ->
-        let with_header header = Cohttp.Header.add header "X-Iw2pg-Version" Version.version in
+        let with_header header =
+          let header = Cohttp.Header.add header "X-Iw2pg-Version" Version.version in
+          let header = Cohttp.Header.add header "Date" (Netdate.mk_mail_date ~localzone:true (Unix.time ())) in
+          header
+        in
         let response = match headers with
           | None -> { response with headers = with_header (Cohttp.Header.init ()) }
           | Some headers -> { response with headers = with_header headers }
