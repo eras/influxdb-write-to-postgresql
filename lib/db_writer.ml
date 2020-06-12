@@ -125,18 +125,6 @@ type error =
 
 exception Error of error
 
-(* backwards compatibility; Option was introduced in OCaml 4.08 *)
-module Option :
-sig
-  val value : 'a option -> default:'a -> 'a
-end =
-struct
-  let value x ~default =
-    match x with
-    | None -> default
-    | Some x -> x
-end
-
 module Internal =
 struct
   include Internal0
