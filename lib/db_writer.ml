@@ -109,6 +109,12 @@ type t = {
   mutable indices: string list list TableMap.t;
 }
 
+type timestamp_method =
+  | TS_CallTimestamp
+  | TS_StringTimestamp [@@warning "-37"] (* warning about not being used for values *)
+
+let timestamp_method = TS_CallTimestamp
+
 type query = string
 
 type 'a with_reason = {
@@ -223,7 +229,10 @@ struct
     |>
     match meas.time with
     | None -> (fun xs -> "CURRENT_TIMESTAMP"::xs)
-    | Some _ -> map_first (fun x -> Printf.sprintf "to_timestamp(%s)" x)
+    | Some _ -> map_first (fun x -> Printf.sprintf
+                              (match timestamp_method with
+                               | TS_StringTimestamp -> "%s"
+                               | TS_CallTimestamp -> "to_timestamp(%s)") x)
 
   let db_insert_fields t meas =
     let tags =
@@ -266,12 +275,28 @@ struct
     let time =
       match meas.time with
       | None -> []
-      | Some x ->
+      | Some epoch_time ->
         [Printf.sprintf "%s" (
-            (* TODO: what about negative values? Check that 'rem' works as expected *)
-            if t.subsecond_time_field
-            then Printf.sprintf "%Ld.%09Ld" (Int64.div x 1000000000L) (Int64.rem x 1000000000L)
-            else Printf.sprintf "%Ld" (Int64.div x 1000000000L)
+            let seconds = Int64.div epoch_time 1000000000L in
+            let microseconds = Int64.(div (rem epoch_time 1000000000L) 1000L) in
+            match timestamp_method with
+            | TS_StringTimestamp ->
+              let date_str =
+                let netdate_t_utc = Netdate.create ~zone:0 (Int64.to_float seconds) in
+                Netdate.format netdate_t_utc ~fmt:"%Y-%m-%d %H:%M:%S"
+              in
+              (* TODO: what about negative values? Check that 'rem' works as
+                 expected *)
+              (* TODO: PostgreSQL only supports microseconds, so this can cause
+                 data loss until the overflow precision finds a storage *)
+              let microseconds = Int64.(div (rem epoch_time 1000000000L) 1000L) in
+              if t.subsecond_time_field
+              then Printf.sprintf "%s.%06Ld UTC" date_str microseconds
+              else Printf.sprintf "%s UTC" date_str
+            | TS_CallTimestamp ->
+              if t.subsecond_time_field
+              then Printf.sprintf "%Ld.%06Ld" seconds microseconds
+              else Printf.sprintf "%Ld" seconds
           )]
     in
     (query, time @ params |> Array.of_list)
