@@ -31,6 +31,10 @@ let setup_logging () =
   Logs.set_reporter (reporter (Format.std_formatter));
   Logs.set_level (Some Info)
 
+let stop_logging () =
+  Logs.set_reporter Logs.nop_reporter;
+  Logs.set_level None
+
 let setup_buffer_logging callback =
   let formatter string offset len =
     callback (String.sub string offset len)

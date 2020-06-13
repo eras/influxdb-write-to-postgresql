@@ -183,11 +183,6 @@ type iw2pg_context = {
   listen_at: Conduit_lwt_unix.server;
 }
 
-let rec seq_of_gen : 'a CCIO.gen -> 'a Seq.t = fun gen () ->
-  match gen () with
-  | None -> Seq.Nil
-  | Some value -> Seq.Cons (value, seq_of_gen gen)
-
 let setup ~make_config ctx f =
   Test_utils.with_new_db
     ~container_info:Test_utils.lwt_container_info
@@ -231,7 +226,7 @@ let setup ~make_config ctx f =
         (fun exn ->
            logf ctx `Info "IW2PG log file contents begins:";
            CCIO.(read_lines_gen log_file_in
-                 |> seq_of_gen
+                 |> Test_utils.seq_of_gen
                  |> Seq.iter @@ fun line ->
                  logf ctx `Info "%s" line;
                 );

@@ -181,10 +181,30 @@ let make_db_writer_config db_spec =
     fields_column = None;
     create_table = None; }
 
+let rec seq_of_gen : 'a CCIO.gen -> 'a Seq.t = fun gen () ->
+  match gen () with
+  | None -> Seq.Nil
+  | Some value -> Seq.Cons (value, seq_of_gen gen)
+
 let with_db_writer ?(make_config=make_db_writer_config) (ctx : OUnit2.test_ctxt) ?schema (f : Db_writer.t Lazy.t db_test_context -> 'a) : 'a =
   with_new_db ctx schema @@ fun { db_spec; _ } ->
+  let (log_file, log_channel) = OUnit2.bracket_tmpfile ctx in
+  let log_file_in = open_in log_file in
+  Logging.setup_out_channel_logging log_channel;
+  Logging.set_level (Some Logs.Debug);
   let db = lazy (Db_writer.create (make_config db_spec)) in
   let ret = Common.valuefy f { db; db_spec } in
+  Logging.stop_logging ();
+  (match ret with
+   | `Exn _ ->
+     CCIO.(read_lines_gen log_file_in
+           |> seq_of_gen
+           |> Seq.iter @@ fun line ->
+           OUnit2.logf ctx `Info "%s" line;
+          );
+   | _ -> ()
+  );
+  close_in log_file_in;
   if Lazy.is_val db then
     Db_writer.close (Lazy.force db);
   (match ret with
