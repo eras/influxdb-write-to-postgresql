@@ -116,7 +116,7 @@ let main () =
   let open Cmdliner in
   let open Cmdargs in
   let wrap_to_prog_config listen_at config_file log_level =
-    Logs.set_level log_level;
+    Logging.set_level log_level;
     iw2pg { listen_at; config_file }
   in
   let version = Version.version in

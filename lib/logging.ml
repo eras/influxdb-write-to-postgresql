@@ -1,5 +1,6 @@
 let db_writer_src = Logs.Src.create "iw2pg.db_writer"
 let iw2pg_src = Logs.Src.create "iw2pg.iw2pg"
+let srcs = [db_writer_src; iw2pg_src]
 
 let reporter ppf =
   let report (src: Logs.src) level ~over k msgf =
@@ -29,3 +30,7 @@ let reporter ppf =
 let setup_logging () =
   Logs.set_reporter (reporter (Format.std_formatter));
   Logs.set_level (Some Info)
+
+let set_level : Logs.level option -> unit = fun level ->
+  srcs |> List.iter @@ fun src ->
+  Logs.Src.set_level src level
