@@ -19,7 +19,7 @@ let _ = Printexc.register_printer (function
  * type matches_regexp = Regexp of string *)
 (* let matches_regexp_of_yojson = function
  *   | `String str -> Ok (Regexp str)
- *   | _ -> Error "Cannot parse regexp for user"
+ *   | _ -> Error "Cannot parse_exn regexp for user"
  * let matches_regexp_to_yojson = function
  *   | Regexp str -> `String str *)
 
@@ -189,20 +189,20 @@ let rec yojson_of_yaml : Yaml.value -> _ = function
   | `O kv -> `Assoc (Common.map_snd yojson_of_yaml kv)
   | `A xs -> `List (List.map yojson_of_yaml xs)
 
-let dump t =
+let dump_exn t =
   let yaml = to_yojson t |> Common.yaml_of_yojson in
   match Yaml.to_string yaml with
   | Ok str -> output_string stdout str
   | Error (`Msg message) -> raise (Error (CannotProcessConfig message))
 
-let parse yaml =
+let parse_exn yaml =
   let yojson = yaml |> yojson_of_yaml in
   (* Printf.printf "yojson: %s\n%!" (Yojson.Safe.to_string yojson); *)
   match yojson |> of_yojson with
   | Ok config -> config
   | Error message -> raise (Error (CannotProcessConfig message))
 
-let load file =
+let load_exn file =
   match Yaml_unix.of_file (Fpath.(v file)) with
-  | Ok yaml -> parse yaml
+  | Ok yaml -> parse_exn yaml
   | Error (`Msg message) -> raise (Error (CannotParseConfig message))

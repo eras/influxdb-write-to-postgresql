@@ -23,24 +23,24 @@ type error = Invalid_database_name of string
 
 exception Error of error
 
-let validate cond =
+let validate_exn cond =
   if not cond then
     raise (Error (Invalid_database_name ""))
 
-let validate_char ~first ch =
-  validate (Common.is_unquoted_ascii ~first (Uchar.of_char ch))
+let validate_char_exn ~first ch =
+  validate_exn (Common.is_unquoted_ascii ~first (Uchar.of_char ch))
 
-let validate_name name =
+let validate_name_exn name =
   try
-    validate (String.length name > 0);
-    validate_char ~first:false name.[0];
-    String.iter (validate_char ~first:false) name;
+    validate_exn (String.length name > 0);
+    validate_char_exn ~first:false name.[0];
+    String.iter (validate_char_exn ~first:false) name;
     name
   with Error (Invalid_database_name _) ->
     raise (Error (Invalid_database_name name))
 
-let create config =
-  List.iter (fun (name, _) -> ignore (validate_name name)) config.databases;
+let create_exn config =
+  List.iter (fun (name, _) -> ignore (validate_name_exn name)) config.databases;
   let dbs =
     List.to_seq config.databases
     |> Seq.map (fun (name, db_config) ->
@@ -52,13 +52,13 @@ let create config =
 let release db_status db () =
   db_status.available <- db::db_status.available
 
-let db t name =
+let db_exn t name =
   match DatabaseNameMap.find name t.dbs with
   | exception Not_found -> None
   | db_status ->
     match db_status.available with
     | [] ->
-      let db = Db_writer.create db_status.db_config in
+      let db = Db_writer.create_exn db_status.db_config in
       let release = release db_status db in
       Some { db; release }
     | db::xs ->

@@ -16,8 +16,8 @@ let handle_request (environment : Requests.request_environment) req body =
   | _, "/write" -> return (`Method_not_allowed, None, "Method not supported.")
   | _ -> return (`Not_found, None, "Not found.")
 
-let make_environment prog_config : Requests.request_environment =
-  let config = Config.load prog_config.config_file in
+let make_environment_exn prog_config : Requests.request_environment =
+  let config = Config.load_exn prog_config.config_file in
   let auth =
     let { Config.users; _ } = config in
     Auth.create { Auth.users } in
@@ -36,7 +36,7 @@ let make_environment prog_config : Requests.request_environment =
     if config.regexp_databases <> [] then
       failwith "Regexp databases not yet supported"
   in
-  let db_spool = Db_spool.create { Db_spool.databases } in
+  let db_spool = Db_spool.create_exn { Db_spool.databases } in
   { auth; config; db_spool; }
 
 let string_of_server = function
@@ -85,8 +85,8 @@ let log_request (req : Request.t) f =
        return ()
     )
 
-let server prog_config =
-  let environment = make_environment prog_config in
+let server_exn prog_config =
+  let environment = make_environment_exn prog_config in
   let callback _conn req body =
     log_request req (fun () ->
         handle_request environment req body
@@ -108,16 +108,16 @@ let server prog_config =
   Log.info (fun m -> m "Starting server at %s" (string_of_server prog_config.listen_at));
   Server.create ~mode:prog_config.listen_at (Server.make ~callback ())
 
-let iw2pg prog_config = ignore (Lwt_main.run (server prog_config))
+let iw2pg_exn prog_config = ignore (Lwt_main.run (server_exn prog_config))
 
-let main () =
+let main_exn () =
   Logging.setup_logging ();
   let _ = Hashtbl.randomize () in
   let open Cmdliner in
   let open Cmdargs in
   let wrap_to_prog_config listen_at config_file log_level =
     Logging.set_level log_level;
-    iw2pg { listen_at; config_file }
+    iw2pg_exn { listen_at; config_file }
   in
   let version = Version.version in
   let log_level_env = Arg.env_var "IW2PG_LOG_LEVEL" in

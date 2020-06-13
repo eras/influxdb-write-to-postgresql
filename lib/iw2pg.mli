@@ -3,5 +3,5 @@ type prog_config = {
   config_file: string;
 }
 
-val iw2pg : prog_config -> unit
-val main : unit -> unit
+val iw2pg_exn : prog_config -> unit
+val main_exn : unit -> unit

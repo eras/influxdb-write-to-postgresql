@@ -3,20 +3,20 @@ type error =
 
 exception Error of error
 
-let valuefy f x =
-  try `Value (f x)
+let valuefy f_exn x =
+  try `Value (f_exn x)
   with exn -> `Exn (exn, Printexc.get_raw_backtrace ())
 
-let unvaluefy = function
+let unvaluefy_exn = function
   | `Value x -> x
   | `Exn (e, raw_backtrace) ->
     Printexc.raise_with_backtrace e raw_backtrace
 
-let time f x =
+let time_exn f x =
   let t0 = Mtime_clock.elapsed () in
   let res = valuefy f x in
   let t1 = Mtime_clock.elapsed () in
-  (Mtime.Span.(abs_diff t0 t1), unvaluefy res)
+  (Mtime.Span.(abs_diff t0 t1), unvaluefy_exn res)
 
 let is_unquoted_ascii ~first x =
   let i = Uchar.to_int x in
@@ -40,7 +40,7 @@ let is_unescaped_ascii x =
   else
     false
 
-let db_of_identifier str =
+let db_of_identifier_exn str =
   let out = Buffer.create (String.length str) in
   Buffer.add_string out "U&\"";
   let decoder = Uutf.decoder ~encoding:`UTF_8 (`String str) in

@@ -166,7 +166,7 @@ let with_iw2pg ?log_target prog_config f =
   if pid = 0 then begin
     (* DB is available due to the call with with_new_db *)
     log_setup ();
-    Iw2pg.iw2pg prog_config;
+    Iw2pg.iw2pg_exn prog_config;
     log_child_post_op ();
     exit 0
   end else begin

@@ -40,19 +40,19 @@ type config = {
 (** [string_of_error error] converts the error to a string *)
 val string_of_error : error -> string
 
-(** [create db_spec] connects to the given database; can raise PgError if it fails *)
-val create : config -> t
+(** [create_exn db_spec] connects to the given database; can raise PgError if it fails *)
+val create_exn : config -> t
 
 (** [close t] disconnects from the database. Can raise. *)
 val close : t -> unit
 
 (** [reconnect t] disconnects and then reconnectfrom the database. Can raise. *)
-val reconnect : t -> unit
+val reconnect_exn : t -> unit
 
-(** [write t measurements] writes measurements to the database, all in one transaction.
+(** [write_exn t measurements] writes measurements to the database, all in one transaction.
 
     Can raise PgError *)
-val write : t -> Influxdb_lexer.measurement list -> unit
+val write_exn : t -> Influxdb_lexer.measurement list -> unit
 
 val db_spec_of_database : Config.database -> db_spec
 
@@ -81,8 +81,8 @@ module Internal: sig
 
   type database_info = (table_name, table_info) Hashtbl.t
 
-  val new_pg_connection : db_spec -> Pg.connection
-  val db_of_identifier : string -> string
+  val new_pg_connection_exn : db_spec -> Pg.connection
+  val db_of_identifier_exn : string -> string
   val db_of_field_type : field_type -> string
 
   (** [insert_of_measurement ?measurements t reference_measurement] generates the INSERT command for inserting the
@@ -92,13 +92,13 @@ module Internal: sig
       If measurements is provided, it must be similar to reference_measurement in the sense that it they must have the
       same tags and the same fields and time field must exist or not exist for all of them, no mixing.
   *)
-  val insert_of_measurement : ?measurements:Influxdb_lexer.measurement list -> t -> Influxdb_lexer.measurement -> string * string array
-  val query_database_info : Pg.connection -> database_info
+  val insert_of_measurement_exn : ?measurements:Influxdb_lexer.measurement list -> t -> Influxdb_lexer.measurement -> string * string array
+  val query_database_info_exn : Pg.connection -> database_info
 
   type made_table = {
     md_command : string;
     md_table_info : table_info;
     md_update_pks : string list list TableMap.t -> string list list TableMap.t;
   }
-  val make_table_command : t -> Influxdb_lexer.measurement -> made_table
+  val make_table_command_exn : t -> Influxdb_lexer.measurement -> made_table
 end

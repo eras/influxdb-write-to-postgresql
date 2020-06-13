@@ -12,12 +12,12 @@ CREATE UNIQUE INDEX meas_time_idx ON meas(time);
 let identity x = x
 
 let testDbOfIdentifier _ctx =
-  assert_equal ~printer:identity {|moi|} (Db_writer.Internal.db_of_identifier "moi");
-  assert_equal ~printer:identity {|moi0|} (Db_writer.Internal.db_of_identifier "moi0");
-  assert_equal ~printer:identity {|U&"0moi"|} (Db_writer.Internal.db_of_identifier "0moi");
-  assert_equal ~printer:identity {|U&"Moi"|} (Db_writer.Internal.db_of_identifier "Moi");
-  assert_equal ~printer:identity {|U&"moi\0020"|} (Db_writer.Internal.db_of_identifier "moi ");
-  assert_equal ~printer:identity {|U&"tidii\2603"|} (Db_writer.Internal.db_of_identifier "tidii☃")
+  assert_equal ~printer:identity {|moi|} (Db_writer.Internal.db_of_identifier_exn "moi");
+  assert_equal ~printer:identity {|moi0|} (Db_writer.Internal.db_of_identifier_exn "moi0");
+  assert_equal ~printer:identity {|U&"0moi"|} (Db_writer.Internal.db_of_identifier_exn "0moi");
+  assert_equal ~printer:identity {|U&"Moi"|} (Db_writer.Internal.db_of_identifier_exn "Moi");
+  assert_equal ~printer:identity {|U&"moi\0020"|} (Db_writer.Internal.db_of_identifier_exn "moi ");
+  assert_equal ~printer:identity {|U&"tidii\2603"|} (Db_writer.Internal.db_of_identifier_exn "tidii☃")
 
 let testInsert ctx =
   let schema = {|
@@ -35,7 +35,7 @@ CREATE UNIQUE INDEX meas_time_idx ON meas(time, moi1, moi2);
       ~fields:[("value", Influxdb_lexer.Int 42L)]
       ~time:(Some 1590329952000000000L)
   in
-  let query = Db_writer.Internal.insert_of_measurement db meas in
+  let query = Db_writer.Internal.insert_of_measurement_exn db meas in
   assert_equal ~printer:identity {|INSERT INTO meas(time, moi1, moi2, value)
 VALUES (to_timestamp($1), $2, $3, $4)
 ON CONFLICT(time, moi1, moi2)
@@ -68,7 +68,7 @@ CREATE UNIQUE INDEX meas_time_idx ON meas(time, moi1, moi2);
       ~time:(Some 1590329952000000000L)
   in
   let { Db_writer.Internal.md_command = query; md_table_info = table_info; _ } =
-    Db_writer.Internal.make_table_command db meas in
+    Db_writer.Internal.make_table_command_exn db meas in
   assert_equal ~printer:identity
     {|CREATE TABLE meas (time timestamptz NOT NULL, moi1 text NOT NULL DEFAULT(''), moi2 text NOT NULL DEFAULT(''), k_int integer, k_float double precision, k_string text, k_bool boolean, PRIMARY KEY(time, moi1, moi2))|}
     query;
@@ -113,7 +113,7 @@ CREATE UNIQUE INDEX meas_time_idx ON meas(time, moi1, moi2);
       ~time:(Some 1590329952000000000L)
   in
   let { Db_writer.Internal.md_command = query; md_table_info = table_info; _ } =
-    Db_writer.Internal.make_table_command db meas in
+    Db_writer.Internal.make_table_command_exn db meas in
   assert_equal ~printer:identity
     {|CREATE TABLE meas (time timestamptz NOT NULL, tags jsonb NOT NULL DEFAULT('{}'), fields jsonb, PRIMARY KEY(time, tags))|}
     query;
@@ -140,7 +140,7 @@ CREATE UNIQUE INDEX meas_time_idx ON meas(time, moi1, moi2);
       ~fields:[("value", Influxdb_lexer.Int 42L)]
       ~time:None
   in
-  let query = Db_writer.Internal.insert_of_measurement db meas in
+  let query = Db_writer.Internal.insert_of_measurement_exn db meas in
   assert_equal ~printer:identity {|INSERT INTO meas(time, moi1, moi2, value)
 VALUES (CURRENT_TIMESTAMP, $1, $2, $3)
 ON CONFLICT(time, moi1, moi2)
@@ -171,7 +171,7 @@ CREATE UNIQUE INDEX meas_time_idx ON meas(time, tags);
       ~fields:[("value", Influxdb_lexer.Int 42L)]
       ~time:(Some 1590329952000000000L)
   in
-  let query = Db_writer.Internal.insert_of_measurement db meas in
+  let query = Db_writer.Internal.insert_of_measurement_exn db meas in
   assert_equal ~printer:identity {|INSERT INTO meas(time, tags, value)
 VALUES (to_timestamp($1), $2, $3)
 ON CONFLICT(time, tags)
@@ -201,7 +201,7 @@ CREATE UNIQUE INDEX meas_time_idx ON meas(time, moi1, moi2);
       ~fields:[("value", Influxdb_lexer.Int 42L)]
       ~time:(Some 1590329952000000000L)
   in
-  let query = Db_writer.Internal.insert_of_measurement db meas in
+  let query = Db_writer.Internal.insert_of_measurement_exn db meas in
   assert_equal ~printer:identity {|INSERT INTO meas(time, moi1, moi2, fields)
 VALUES (to_timestamp($1), $2, $3, $4)
 ON CONFLICT(time, moi1, moi2)
@@ -209,11 +209,11 @@ DO UPDATE SET fields=meas.fields||excluded.fields|} (fst query);
   assert_equal ~printer:(fun x -> Array.to_list x |> String.concat ",") [|"1590329952"; "1"; "2"; {|{"value":42}|}|]
     (snd query)
 
-let assert_tables db expect =
+let assert_tables_exn db expect =
   let module DI = Db_writer.Internal in
   let sort xs = List.sort compare xs in
   let tables =
-    Db_writer.Internal.query_database_info db
+    Db_writer.Internal.query_database_info_exn db
     |> Hashtbl.to_seq
     |> List.of_seq
     |> Common.map_snd (fun x -> x.DI.fields |> DI.FieldMap.to_seq |> Seq.map fst |> List.of_seq |> sort)
@@ -246,11 +246,11 @@ let testWriteBase ?(duplicate_write=false) ?json_tags ?json_fields ?make_config 
       ~time:(Some 1590329952000000000L)
   in
   (try
-     ignore (Db_writer.write db [meas]);
-     if duplicate_write then ignore (Db_writer.write db [meas]);
-     let direct = Db_writer.Internal.new_pg_connection (Lazy.force db_spec) in
+     ignore (Db_writer.write_exn db [meas]);
+     if duplicate_write then ignore (Db_writer.write_exn db [meas]);
+     let direct = Db_writer.Internal.new_pg_connection_exn (Lazy.force db_spec) in
      let (tags, tag_fields), (fields, fields_fields) = tags_fields json_tags json_fields in
-     assert_tables direct ["meas", ["time"] @ tag_fields @ fields_fields];
+     assert_tables_exn direct ["meas", ["time"] @ tag_fields @ fields_fields];
      let result = direct#exec ~expect:[Postgresql.Tuples_ok] ("SELECT extract(epoch from time), " ^ tags ^ ", " ^ fields ^ " FROM meas") in
      match result#get_all_lst with
      | [[time; moi1; moi2; value]] ->
@@ -372,10 +372,10 @@ let testWriteMultiBase ?(test_sequence=base_test_sequence) ?json_tags ?json_fiel
   let db = Lazy.force db in
   let test_sequence_op label input all_reference_content =
     (try
-       ignore (Db_writer.write db input);
-       let direct = Db_writer.Internal.new_pg_connection (Lazy.force db_spec) in
+       ignore (Db_writer.write_exn db input);
+       let direct = Db_writer.Internal.new_pg_connection_exn (Lazy.force db_spec) in
        let (tags, tag_fields), (fields, fields_fields) = tags_fields json_tags json_fields in
-       assert_tables direct ["meas", ["time"] @ tag_fields @ fields_fields];
+       assert_tables_exn direct ["meas", ["time"] @ tag_fields @ fields_fields];
        let query = "SELECT extract(epoch from time), " ^ tags ^ ", " ^ fields ^ " FROM meas" in
        let result = direct#exec ~expect:[Postgresql.Tuples_ok] query in
        assert_equal ~msg:"Number of results" ~printer:string_of_int (List.length all_reference_content) (List.length result#get_all_lst);
@@ -563,8 +563,8 @@ CREATE UNIQUE INDEX meas_time_idx ON meas(time, moi1, moi2);
       ~time:None
   in
   (try
-     ignore (Db_writer.write db [meas]);
-     let direct = Db_writer.Internal.new_pg_connection (Lazy.force db_spec) in
+     ignore (Db_writer.write_exn db [meas]);
+     let direct = Db_writer.Internal.new_pg_connection_exn (Lazy.force db_spec) in
      let result = direct#exec ~expect:[Postgresql.Tuples_ok] "SELECT extract(epoch from now() - time), moi1, moi2, value FROM meas" in
      match result#get_all_lst with
      | [[delta; moi1; moi2; value]] ->
@@ -603,8 +603,8 @@ CREATE UNIQUE INDEX meas_time_idx ON meas(time, tags);
       ~time:(Some 1590329952000000000L)
   in
   (try
-     ignore (Db_writer.write db [meas]);
-     let direct = Db_writer.Internal.new_pg_connection (Lazy.force db_spec) in
+     ignore (Db_writer.write_exn db [meas]);
+     let direct = Db_writer.Internal.new_pg_connection_exn (Lazy.force db_spec) in
      let result = direct#exec ~expect:[Postgresql.Tuples_ok] "SELECT extract(epoch from time), tags->>'moi1', tags->>'moi2', value FROM meas" in
      match result#get_all_lst with
      | [[time; moi1; moi2; value]] ->
@@ -642,8 +642,8 @@ CREATE UNIQUE INDEX meas_time_idx ON meas(time, moi1, moi2);
       ~time:(Some 1590329952000000000L)
   in
   (try
-     ignore (Db_writer.write db [meas]);
-     let direct = Db_writer.Internal.new_pg_connection (Lazy.force db_spec) in
+     ignore (Db_writer.write_exn db [meas]);
+     let direct = Db_writer.Internal.new_pg_connection_exn (Lazy.force db_spec) in
      let result = direct#exec ~expect:[Postgresql.Tuples_ok] "SELECT extract(epoch from time), moi1, moi2, fields->>'value' FROM meas" in
      match result#get_all_lst with
      | [[time; moi1; moi2; value]] ->

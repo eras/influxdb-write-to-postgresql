@@ -35,10 +35,10 @@ let _testDump _ctx =
       regexp_databases = [];
       realm = "lala";
     }) in
-  Config.dump config
+  Config.dump_exn config
 
 let testLoad _ctx =
-  let _config = Config.load "doc/config.example.yaml" in
+  let _config = Config.load_exn "doc/config.example.yaml" in
   ()
 
 let suite = "Db_config" >::: [

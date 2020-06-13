@@ -53,7 +53,7 @@ let string_of_ParseError (file, line, cnum, tok) =
     (file_to_string file)
     line cnum tok
 
-let raise_ParseError lexbuf =
+let raise_ParseError_exn lexbuf =
   let { pos; _ } = lexbuf in
   let tok = lexeme lexbuf in
   let open Lexing in
@@ -62,8 +62,7 @@ let raise_ParseError lexbuf =
   Printf.fprintf stderr "Parse error: %s\n" (string_of_ParseError (pos.pos_fname, line, col, tok));
   raise @@ ParseError (pos.pos_fname, line, col, tok)
 
-
-let sedlex_with_menhir lexer' parser' lexbuf =
+let sedlex_with_menhir_exn lexer' parser' lexbuf =
   let lexer () =
     let ante_position = lexbuf.pos in
     let token = lexer' lexbuf in
@@ -78,4 +77,4 @@ let sedlex_with_menhir lexer' parser' lexbuf =
   (* | Parser.Error *)
   | Sedlexing.MalFormed
   | Sedlexing.InvalidCodepoint _
-    -> raise_ParseError lexbuf
+    -> raise_ParseError_exn lexbuf

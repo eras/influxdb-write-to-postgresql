@@ -52,7 +52,7 @@ let integer_rest = [%sedlex.regexp? '0'..'9' ]
 
 let binop = [%sedlex.regexp? Plus('+' | '-' | '*' | '/' | '<' | '>' | '=' | '~' | '!' | '@' | '#' | '%' | '^' | '&' | '|' | '`' | '?') ]
 
-let rec lex buf =
+let rec lex_exn buf =
   match%sedlex buf with
   | ('C' | 'c'), ('R' | 'r'), ('E' | 'e'), ('A' | 'a'), ('T' | 't'), ('E' | 'e') -> CREATE
   | ('U' | 'u'), ('N' | 'n'), ('I' | 'i'), ('Q' | 'q'), ('U' | 'u'), ('E' | 'e') -> UNIQUE
@@ -81,7 +81,7 @@ let rec lex buf =
   | ">" -> RELOP_GT
   | "=" -> EQUAL
   | binop -> BINOP (Sedlexing.Utf8.lexeme buf)
-  | ' ' | '\t' -> lex buf
+  | ' ' | '\t' -> lex_exn buf
   | '.' -> DOT
   | integer_first, Star integer_rest -> VALUE (Sql_types.V_Integer (Int64.of_string (Sedlexing.Utf8.lexeme buf)))
   | ident_first, Star ident_rest -> IDENT (Sedlexing.Utf8.lexeme buf)
@@ -111,5 +111,5 @@ let rec lex buf =
     (* TODO: Raise error if there is still data in buffer *)
     END
 
-let lex_menhir lexbuf =
-  lex lexbuf.stream
+let lex_menhir_exn lexbuf =
+  lex_exn lexbuf.stream

@@ -76,5 +76,5 @@ type t = {
  * val of_yojson : Yojson.Safe.t -> t Ppx_deriving_yojson_runtime.error_or
  * val parse : Yaml.value -> t *)
 
-val dump : t -> unit
-val load : string -> t
+val dump_exn : t -> unit
+val load_exn : string -> t

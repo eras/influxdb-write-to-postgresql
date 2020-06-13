@@ -40,11 +40,11 @@ exception Error of error
 (** [string_of_error] converts error to a human-readable message *)
 val string_of_error : error -> string
 
-(** [permitted] determines if user/password combination is permitted
+(** [permitted_exn] determines if user/password combination is permitted_exn
     in the given context *)
-val permitted : t -> context:context -> request:request -> result
+val permitted_exn : t -> context:context -> request:request -> result
 
-(** [permitted_header] picks the required information from the header
-    and hands over to [permitted].
+(** [permitted_header_exn] picks the required information from the header
+    and hands over to [permitted_exn].
 *)
-val permitted_header : t -> context:context -> header:Cohttp.Header.t -> result
+val permitted_header_exn : t -> context:context -> header:Cohttp.Header.t -> result

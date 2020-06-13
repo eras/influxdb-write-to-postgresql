@@ -40,8 +40,8 @@ exception Error of error
 
 val string_of_error : error -> string
 
-val line : Sedlexing.lexbuf -> measurement
-val lines : Sedlexing.lexbuf -> measurement list
+val line_exn : Sedlexing.lexbuf -> measurement
+val lines_exn : Sedlexing.lexbuf -> measurement list
 
 val string_of_tag : string * string -> string
 val string_of_field : string * value -> string

@@ -1,1 +1,1 @@
-let _ = Influxdb_write_to_postgresql.Iw2pg.main ()
+let _ = Influxdb_write_to_postgresql.Iw2pg.main_exn ()

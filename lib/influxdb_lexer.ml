@@ -80,7 +80,7 @@ type error = {
 
 exception Error of error
 
-let log_raise error =
+let log_raise_exn error =
   (* ( match error with
    *   | Error error ->
    *     Printf.fprintf stderr "raising %s\n%!" error.message
@@ -96,20 +96,20 @@ let _ = Printexc.register_printer (function
     | _ -> None
   )
 
-let identifier buf =
+let identifier_exn buf =
   match%sedlex buf with
   | identifier -> (Sedlexing.Utf8.lexeme buf)
-  | _ -> log_raise (Error {info = Parse_error; message = "Expected identifier; received <" ^ Sedlexing.Utf8.lexeme buf ^ ">"})
+  | _ -> log_raise_exn (Error {info = Parse_error; message = "Expected identifier; received <" ^ Sedlexing.Utf8.lexeme buf ^ ">"})
 
 (* let tag_value = [%sedlex.regexp? (Star (Sub(any, ('\\' | ' ' | '=' | ',')) | ('\\', ('\\' | ' ' | '=' | ','))))] *)
-let unquote_tag_value buf =
+let unquote_tag_value_exn buf =
   let out = Buffer.create 20 in
   let rec loop () =
     match%sedlex buf with
     | Star (Sub(any, ('\\' | ' ' | '=' | ','))) ->
       Buffer.add_string out (Sedlexing.Utf8.lexeme buf);
       quoted ()
-    | _ -> log_raise (Error {info = Parse_error; message = "Expected tag value; received <" ^ Sedlexing.Utf8.lexeme buf ^ ">"})
+    | _ -> log_raise_exn (Error {info = Parse_error; message = "Expected tag value; received <" ^ Sedlexing.Utf8.lexeme buf ^ ">"})
   and quoted () =
     match%sedlex buf with
     | '\\', ('\\' | ' ' | '=' | ',') ->
@@ -123,14 +123,14 @@ let unquote_tag_value buf =
   loop ()
 
 (* let string = [%sedlex.regexp? '"', (Star (Sub(any, ('\\' | '"')) | ('\\', ('\\' | '"')))), '"'] *)
-let unquote_field_value buf =
+let unquote_field_value_exn buf =
   let out = Buffer.create 20 in
   let rec loop () =
     match%sedlex buf with
     | Star (Sub(any, ('\\' | '"'))) ->
       Buffer.add_string out (Sedlexing.Utf8.lexeme buf);
       quoted ()
-    | _ -> log_raise (Error {info = Parse_error; message = "Expected field value; received <" ^ Sedlexing.Utf8.lexeme buf ^ ">"})
+    | _ -> log_raise_exn (Error {info = Parse_error; message = "Expected field value; received <" ^ Sedlexing.Utf8.lexeme buf ^ ">"})
   and quoted () =
     match%sedlex buf with
     | '\\', ('\\' | '"') ->
@@ -143,104 +143,104 @@ let unquote_field_value buf =
   in
   loop ()
 
-let tag_value buf =
+let tag_value_exn buf =
   match%sedlex buf with
-  | tag_value -> unquote_tag_value (Sedlexing.Utf8.from_string (Sedlexing.Utf8.lexeme buf))
-  | _ -> log_raise (Error {info = Parse_error; message = "Expected tag value; received <" ^ Sedlexing.Utf8.lexeme buf ^ ">"})
+  | tag_value -> unquote_tag_value_exn (Sedlexing.Utf8.from_string (Sedlexing.Utf8.lexeme buf))
+  | _ -> log_raise_exn (Error {info = Parse_error; message = "Expected tag value; received <" ^ Sedlexing.Utf8.lexeme buf ^ ">"})
 
-let equals buf =
+let equals_exn buf =
   match%sedlex buf with
   | '=' -> (Sedlexing.Utf8.lexeme buf)
-  | _ -> log_raise (Error {info = Parse_error; message = "Expected equal sign; received <" ^ Sedlexing.Utf8.lexeme buf ^ ">"})
+  | _ -> log_raise_exn (Error {info = Parse_error; message = "Expected equal sign; received <" ^ Sedlexing.Utf8.lexeme buf ^ ">"})
 
-let string str =
-  unquote_field_value (Sedlexing.Utf8.from_string (String.sub str 1 (String.length str - 2)))
+let string_exn str =
+  unquote_field_value_exn (Sedlexing.Utf8.from_string (String.sub str 1 (String.length str - 2)))
 
-let value buf =
+let value_exn buf =
   (* let value = [%sedleex.regexp? integer_suffix | string | float | boolean] *)
   match%sedlex buf with
   | integer_suffix ->
     let str = Sedlexing.Utf8.lexeme buf in
     Int (Int64.of_string (String.sub str 0 (String.length str - 1)))
-  | string -> String (string (Sedlexing.Utf8.lexeme buf))
+  | string -> String (string_exn (Sedlexing.Utf8.lexeme buf))
   | float -> FloatNum (Scanf.sscanf (Sedlexing.Utf8.lexeme buf) "%f" (fun x -> x))
   | boolean ->
     (match (Sedlexing.Utf8.lexeme buf).[0] with
      | 't' | 'T' -> Boolean true
      | 'f' | 'F' -> Boolean false
      | _ -> assert false)
-  | _ -> log_raise (Error {info = Parse_error; message = "Expected value; received <" ^ Sedlexing.Utf8.lexeme buf ^ ">"})
+  | _ -> log_raise_exn (Error {info = Parse_error; message = "Expected value; received <" ^ Sedlexing.Utf8.lexeme buf ^ ">"})
 
-let tags buf =
-  let rec loop fields =
+let tags_exn buf =
+  let rec loop_exn fields =
     match%sedlex buf with
     | "," ->
-      let identifier = identifier buf in
-      let _equals = equals buf in
-      let tag_value = tag_value buf in
+      let identifier = identifier_exn buf in
+      let _equals = equals_exn buf in
+      let tag_value = tag_value_exn buf in
       let field = (identifier, tag_value) in
-      loop (field::fields)
+      loop_exn (field::fields)
     | _ -> List.rev fields
   in
-  loop []
+  loop_exn []
 
-let fields buf =
+let fields_exn buf =
   match%sedlex buf with
   | ' ' ->
-    let rec loop fields =
-      let identifier = identifier buf in
-      let _equals = equals buf in
-      let value = value buf in
+    let rec loop_exn fields =
+      let identifier = identifier_exn buf in
+      let _equals = equals_exn buf in
+      let value = value_exn buf in
       let field = (identifier, value) in
       (* Printf.fprintf stderr "%s=%s\n%!" identifier (string_of_value value); *)
       let fields = field::fields in
       match%sedlex buf with
-      | "," -> loop fields
+      | "," -> loop_exn fields
       | _ -> List.rev fields
     in
-    loop []
-  | _ -> log_raise (Error {info = Parse_error; message = "Expected fields"})
+    loop_exn []
+  | _ -> log_raise_exn (Error {info = Parse_error; message = "Expected fields"})
 
-let time buf =
+let time_exn buf =
   match%sedlex buf with
   | " ", integer ->
     let str = Sedlexing.Utf8.lexeme buf in
     Some (Int64.of_string (String.sub str 1 (String.length str - 1)))
   | " " ->
-    log_raise (Error {info = Parse_error; message = "Expected time"})
+    log_raise_exn (Error {info = Parse_error; message = "Expected time"})
   | _ -> None (* last field, so we may need to encounter newline as well *)
 
-let rest buf =
+let rest_exn buf =
   let measurement = Sedlexing.Utf8.lexeme buf in
-  let tags = tags buf in
+  let tags = tags_exn buf in
   (* Printf.printf "tags: %s\n%!" (String.concat "," (List.map string_of_tag tags)); *)
-  let fields = fields buf in
+  let fields = fields_exn buf in
   (* Printf.printf "fields: %s\n%!" (String.concat "," (List.map string_of_field fields)); *)
-  let time = time buf in
+  let time = time_exn buf in
   { measurement; tags; fields; time }
 
 (* <measurement>[,<tag_key>=<tag_value>[,<tag_key>=<tag_value>]] <field_key>=<field_value>[,<field_key>=<field_value>] [<timestamp>] *)
-let line buf =
+let line_exn buf =
   (* Printf.fprintf stderr "tidii\n%!"; *)
   (* let buf = Sedlexing.Utf8.from_string str in *)
   match%sedlex buf with
   | identifier ->
-    rest buf
-  | _ -> log_raise (Error {info = Parse_error; message = "Expected measurement name (table)"})
+    rest_exn buf
+  | _ -> log_raise_exn (Error {info = Parse_error; message = "Expected measurement name (table)"})
 
-let lines buf =
+let lines_exn buf =
   let rec loop aux =
     match%sedlex buf with
     | identifier ->
-      let field = rest buf in
+      let field = rest_exn buf in
       let aux = field::aux in
       ( match%sedlex buf with
         | '\n' -> loop aux
         | eof -> List.rev aux
-        | _ -> log_raise (Error {info = Parse_error; message = "A new entry expected; received <" ^ Sedlexing.Utf8.lexeme buf ^ ">"})
+        | _ -> log_raise_exn (Error {info = Parse_error; message = "A new entry expected; received <" ^ Sedlexing.Utf8.lexeme buf ^ ">"})
       )
     | eof -> List.rev aux
-    | _ -> log_raise (Error {info = Parse_error; message = "End of data expected; received <" ^ Sedlexing.Utf8.lexeme buf ^ ">"})
+    | _ -> log_raise_exn (Error {info = Parse_error; message = "End of data expected; received <" ^ Sedlexing.Utf8.lexeme buf ^ ">"})
   in
   loop []
 

@@ -84,7 +84,7 @@ let testPlain _ctx =
   let auth = Auth.create (user_pass_config ()) in
   let context = { Auth.allowed_users = Some ["test1"; "test2"] } in
   user_password_driver @@ fun ~(request:Auth.request) ->
-  Auth.permitted auth ~context ~request
+  Auth.permitted_exn auth ~context ~request
 
 let testArgon2 _ctx =
   (* encrypted "password1" *)
@@ -92,7 +92,7 @@ let testArgon2 _ctx =
   let auth = Auth.create (user_pass_config ~password ()) in
   let context = { Auth.allowed_users = Some ["test1"; "test2"] } in
   user_password_driver @@ fun ~(request:Auth.request) ->
-  Auth.permitted auth ~context ~request
+  Auth.permitted_exn auth ~context ~request
 
 let basic_of_request (request : Auth.request) =
   let headers = Cohttp.Header.init () in
@@ -114,7 +114,7 @@ let testBasic _ctx =
   let context = { Auth.allowed_users = Some ["test1"; "test2"] } in
   user_password_driver @@ fun ~(request:Auth.request) ->
   let header = basic_of_request request in
-  Auth.permitted_header auth ~context ~header
+  Auth.permitted_header_exn auth ~context ~header
 
 let testToken _ctx =
   let token_of_request (request : Auth.request) =
@@ -128,14 +128,14 @@ let testToken _ctx =
   let context = { Auth.allowed_users = Some ["test1"; "test2"] } in
   user_password_driver @@ fun ~(request:Auth.request) ->
   let header = token_of_request request in
-  Auth.permitted_header auth ~context ~header
+  Auth.permitted_header_exn auth ~context ~header
 
 let testNoAuth _ctx =
   let auth = Auth.create (user_pass_config ()) in
   let context = { Auth.allowed_users = None } in
   no_auth_driver @@ fun ~(request:Auth.request) ->
   let header = basic_of_request request in
-  Auth.permitted_header auth ~context ~header
+  Auth.permitted_header_exn auth ~context ~header
 
 let suite = "Db_auth" >::: [
     "testPlain" >:: testPlain;

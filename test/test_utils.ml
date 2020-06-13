@@ -126,19 +126,19 @@ let retry f =
       | None -> assert false
       | Some exn -> `Exn exn
   in
-  Common.unvaluefy (loop 10 None)
+  Common.unvaluefy_exn (loop 10 None)
 
-let create_new_database =
+let create_new_database_exn =
   let db_id_counter = ref 0 in
   fun ?schema db_spec ->
     let name = Printf.sprintf "test_db_%d_%03d" (Unix.getpid ()) !db_id_counter in
     let _ = incr db_id_counter in
     let pg = retry @@ fun () ->
-      Db_writer.Internal.new_pg_connection db_spec
+      Db_writer.Internal.new_pg_connection_exn db_spec
     in
     ignore (pg#exec ~expect:[Postgresql.Command_ok] (Printf.sprintf {|
 CREATE DATABASE %s
-|} (Db_writer.Internal.db_of_identifier name)));
+|} (Db_writer.Internal.db_of_identifier_exn name)));
     pg#finish;
     let conninfo_with_dbname =
       match db_spec with
@@ -148,7 +148,7 @@ CREATE DATABASE %s
     (match schema with
      | None -> ()
      | Some schema ->
-       let pg = Db_writer.Internal.new_pg_connection conninfo_with_dbname in
+       let pg = Db_writer.Internal.new_pg_connection_exn conninfo_with_dbname in
        ignore (pg#exec ~expect:[Postgresql.Command_ok] schema);
        pg#finish);
     conninfo_with_dbname
@@ -171,7 +171,7 @@ let with_conninfo ?(container_info=container_info) ?(db_spec_format=DbSpecConnIn
 
 let with_new_db ?container_info ?db_spec_format ctx schema f =
   with_conninfo ?container_info ?db_spec_format ctx @@ fun { db_spec; db = () } ->
-  let db_spec = lazy (create_new_database ?schema (Lazy.force db_spec)) in
+  let db_spec = lazy (create_new_database_exn ?schema (Lazy.force db_spec)) in
   f { db = (); db_spec; }
 
 let make_db_writer_config db_spec =
@@ -192,7 +192,7 @@ let with_db_writer ?(make_config=make_db_writer_config) (ctx : OUnit2.test_ctxt)
   let log_file_in = open_in log_file in
   Logging.setup_out_channel_logging log_channel;
   Logging.set_level (Some Logs.Debug);
-  let db = lazy (Db_writer.create (make_config db_spec)) in
+  let db = lazy (Db_writer.create_exn (make_config db_spec)) in
   let ret = Common.valuefy f { db; db_spec } in
   Logging.stop_logging ();
   (match ret with
@@ -214,4 +214,4 @@ let with_db_writer ?(make_config=make_db_writer_config) (ctx : OUnit2.test_ctxt)
      OUnit2.logf ctx `Error "Sql_types.Error: %s\nBacktrace: %s" (Sql_types.string_of_error error) (Printexc.raw_backtrace_to_string raw_backtrace)
    | _ -> ()
   );
-  Common.unvaluefy ret
+  Common.unvaluefy_exn ret

@@ -109,7 +109,7 @@ let create config =
   { config;
     argon2_cache = Argon2Cache.create 1024 }
 
-let argon2_lookup t =
+let argon2_lookup_exn t =
   let lookup (encoded, password) =
     match Argon2.verify ~encoded ~pwd:password ~kind:Argon2.I with
     | Ok x -> Ok (Ok x)
@@ -122,14 +122,14 @@ let argon2_lookup t =
     | Ok x -> x
     | Error exn -> raise exn
 
-let auth_password_ok t (_context : context) (pw : Config.password) request =
+let auth_password_ok_exn t (_context : context) (pw : Config.password) request =
   match pw.type_, request with
   | Plain, { user = _; password = Some password } ->
     if pw.password = password
     then AuthSuccess
     else AuthFailed
   | Argon2,  { user = _; password = Some password } -> begin
-      match argon2_lookup t ~encoded:pw.password ~pwd:password with
+      match argon2_lookup_exn t ~encoded:pw.password ~pwd:password with
       | Ok true -> AuthSuccess
       | Ok false -> AuthFailed
       | Error Argon2.ErrorCodes.VERIFY_MISMATCH -> AuthFailed
@@ -138,7 +138,7 @@ let auth_password_ok t (_context : context) (pw : Config.password) request =
   | (Plain | Argon2), _ ->
     AuthFailed
 
-let permitted t ~(context : context) ~(request : request) =
+let permitted_exn t ~(context : context) ~(request : request) =
   let config_user_info = Option.map (fun user -> List.assoc_opt user t.config.users) request.user in
   match context.allowed_users, request, config_user_info with
   | None, { user = None; password = None }, _ ->
@@ -152,7 +152,7 @@ let permitted t ~(context : context) ~(request : request) =
     Some (Some { Config.password = Some password; _ }) when List.mem user allowed_users ->
     (* If authentication is provided and configured, then does it
        match? *)
-    auth_password_ok t context password request
+    auth_password_ok_exn t context password request
   | Some _, _, _ ->
     (* Otherwise, reject *)
     AuthFailed
@@ -164,7 +164,7 @@ type authorization =
 let basic_char = [%sedlex.regexp? Sub(any, ('\x00'.. '\x1f' | '\x7f'))]
 
 (* Influxdb "token" is basic auth but without base64 🙄 *)
-let parse_token ?(exn=FailedToParseAuthorizationToken) content =
+let parse_token_exn ?(exn=FailedToParseAuthorizationToken) content =
   let buf = Sedlexing.Utf8.from_string content in
   (* https://tools.ietf.org/html/rfc7617#section-2 *)
   (* https://tools.ietf.org/html/rfc5234#appendix-B.1 *)
@@ -181,7 +181,7 @@ let parse_token ?(exn=FailedToParseAuthorizationToken) content =
     (user, password)
   | _ -> raise (Error exn)
 
-let parse_base64_user_pass content =
+let parse_base64_user_pass_exn content =
   let content =
     try
       let base64dec = Cryptokit.Base64.decode () in
@@ -191,28 +191,28 @@ let parse_base64_user_pass content =
     with Cryptokit.Error error ->
       raise (Error (CryptokitError error))
   in
-  parse_token ~exn:FailedToParseAuthorizationBasic content
+  parse_token_exn ~exn:FailedToParseAuthorizationBasic content
 
-let parse_authorization str =
+let parse_authorization_exn str =
   let buf = Sedlexing.Utf8.from_string str in
   match%sedlex buf with
   | ('B' | 'b'), ('A' | 'a'), ('S' | 's'), ('I' | 'i'), ('C' | 'c'), ' ' ->
     let content =
       match%sedlex buf with
-      | Plus any -> Basic (parse_base64_user_pass (Sedlexing.Utf8.lexeme buf))
+      | Plus any -> Basic (parse_base64_user_pass_exn (Sedlexing.Utf8.lexeme buf))
       | _ -> raise (Error FailedToParseAuthorization)
     in
     content
   | ('T' | 't'), ('O' | 'o'), ('K' | 'k'), ('E' | 'e'), ('N' | 'n'), ' ' ->
     let content =
       match%sedlex buf with
-      | Plus any -> Token (parse_token (Sedlexing.Utf8.lexeme buf))
+      | Plus any -> Token (parse_token_exn (Sedlexing.Utf8.lexeme buf))
       | _ -> raise (Error FailedToParseAuthorization)
     in
     content
   | _ -> raise (Error FailedToParseAuthorization)
 
-let request_of_header header =
+let request_of_header_exn header =
   match Cohttp.Header.get header "Authorization" with
   | None ->
     {
@@ -220,7 +220,7 @@ let request_of_header header =
       password = None;
     }
   | Some auth ->
-    match parse_authorization auth with
+    match parse_authorization_exn auth with
     | Basic (user, password) ->
       {
         user = Some user;
@@ -232,6 +232,6 @@ let request_of_header header =
         password = Some password;
       }
 
-let permitted_header t ~context ~header =
-  let request = request_of_header header in
-  permitted t ~context ~request
+let permitted_header_exn t ~context ~header =
+  let request = request_of_header_exn header in
+  permitted_exn t ~context ~request

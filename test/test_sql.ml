@@ -6,7 +6,7 @@ let testLexCreateUniqueIndex _ctx =
   let sedlexing = Sedlexing.Utf8.from_string statement in
 
   let printer = Sql_lexer.string_of_token in
-  let lex () = Sql_lexer.lex sedlexing in
+  let lex () = Sql_lexer.lex_exn sedlexing in
   let open Sql_parser in
   assert_equal ~printer CREATE (lex ());
   assert_equal ~printer UNIQUE (lex ());
@@ -33,8 +33,8 @@ let testLexCreateUniqueIndex _ctx =
 let testParseCreateUniqueIndex _ctx =
   let statement = {|CREATE UNIQUE INDEX meas_time_idx ON public.meas USING btree ("time", moi1, moi2)|} in
   let parsed =
-    Sedlex_menhir.sedlex_with_menhir
-      Sql_lexer.lex_menhir
+    Sedlex_menhir.sedlex_with_menhir_exn
+      Sql_lexer.lex_menhir_exn
       Sql_parser.statement
       (Sedlex_menhir.create_lexbuf (Sedlexing.Utf8.from_string statement))
   in
@@ -54,8 +54,8 @@ let testParseCreateUniqueIndexFunctional _ctx =
   let statement = {|CREATE UNIQUE INDEX meas_time_idx ON public.meas USING btree ("time", (wrappersies(moi1)), moi2)|} in
   let parsed =
     try
-      Sedlex_menhir.sedlex_with_menhir
-        Sql_lexer.lex_menhir
+      Sedlex_menhir.sedlex_with_menhir_exn
+        Sql_lexer.lex_menhir_exn
         Sql_parser.statement
         (Sedlex_menhir.create_lexbuf (Sedlexing.Utf8.from_string statement))
     with Sql_types.Error error ->
@@ -78,8 +78,8 @@ let testParseCreateUniqueIndexWhere _ctx =
   let parsed =
     let lexbuf = Sedlex_menhir.create_lexbuf (Sedlexing.Utf8.from_string statement) in
     try
-      Sedlex_menhir.sedlex_with_menhir
-        Sql_lexer.lex_menhir
+      Sedlex_menhir.sedlex_with_menhir_exn
+        Sql_lexer.lex_menhir_exn
         Sql_parser.statement
         lexbuf
     with
