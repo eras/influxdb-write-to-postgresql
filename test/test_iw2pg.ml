@@ -141,13 +141,36 @@ let wait_head ~uri =
   Lwt.pick [retry 50;
             Lwt_unix.sleep 5.0 >>= fun () -> Lwt.fail (Timeout ("wait_head " ^ string_of_int !counter))]
 
-let with_iw2pg prog_config f =
+type log_target =
+  | LT_Stdout
+  | LT_Out_channel of out_channel
+
+let with_iw2pg ?log_target prog_config f =
   let pid = Lwt_unix.fork () in
+  let log_setup, log_parent_op, log_child_post_op =
+    match log_target with
+    | None ->
+      ignore, ignore, ignore
+    | Some LT_Stdout ->
+      (fun () ->
+         Logging.setup_logging ();
+         Logging.set_level (Some Logs.Debug)),
+      ignore, ignore
+    | Some LT_Out_channel channel ->
+      (fun () ->
+         Logging.setup_out_channel_logging channel;
+         Logging.set_level (Some Logs.Debug)),
+      (fun () -> close_out channel),
+      (fun () -> close_out channel)
+  in
   if pid = 0 then begin
     (* DB is available due to the call with with_new_db *)
+    log_setup ();
     Iw2pg.iw2pg prog_config;
+    log_child_post_op ();
     exit 0
   end else begin
+    log_parent_op ();
     Lwt.finalize
       f
       (fun () ->
@@ -159,6 +182,11 @@ type iw2pg_context = {
   db_spec: Db_writer.db_spec lazy_t;
   listen_at: Conduit_lwt_unix.server;
 }
+
+let rec seq_of_gen : 'a CCIO.gen -> 'a Seq.t = fun gen () ->
+  match gen () with
+  | None -> Seq.Nil
+  | Some value -> Seq.Cons (value, seq_of_gen gen)
 
 let setup ~make_config ctx f =
   Test_utils.with_new_db
@@ -187,10 +215,32 @@ let setup ~make_config ctx f =
     } in
   let listen_at = `TCP (`Port listen_port) in
   (* CCIO.(with_in config_file @@ fun file -> Printf.eprintf "%s\n%!" (read_all file)); *)
-  with_iw2pg prog_config @@ fun () ->
-  (* close this the socket of this process *)
-  Lwt_unix.close listen_socket >>= fun () ->
-  f { db_spec; listen_at }
+  let (log_file, log_channel) = bracket_tmpfile ctx in
+  (* hack: open the log file now, so bracket_tmpfile can delete it even in subproces.. *)
+  let log_file_in = open_in log_file in
+  Lwt.finalize (fun () ->
+      Lwt.catch
+        (fun () ->
+           with_iw2pg ~log_target:(LT_Out_channel log_channel) prog_config @@ fun () ->
+           (* close this the log channel of this process *)
+           close_out log_channel;
+           (* close this the socket of this process *)
+           Lwt_unix.close listen_socket >>= fun () ->
+           f { db_spec; listen_at }
+        )
+        (fun exn ->
+           logf ctx `Info "IW2PG log file contents begins:";
+           CCIO.(read_lines_gen log_file_in
+                 |> seq_of_gen
+                 |> Seq.iter @@ fun line ->
+                 logf ctx `Info "%s" line;
+                );
+           logf ctx `Info "IW2PG log file contents ends.";
+           raise exn)
+    ) (fun () ->
+      close_in log_file_in;
+      return ()
+    )
 
 let uri_at listen_at path =
   let port = match listen_at with

@@ -31,6 +31,17 @@ let setup_logging () =
   Logs.set_reporter (reporter (Format.std_formatter));
   Logs.set_level (Some Info)
 
+let setup_buffer_logging callback =
+  let formatter string offset len =
+    callback (String.sub string offset len)
+  in
+  Logs.set_reporter (reporter (Format.make_formatter formatter ignore));
+  Logs.set_level (Some Info)
+
+let setup_out_channel_logging out_channel =
+  Logs.set_reporter (reporter (Format.formatter_of_out_channel out_channel));
+  Logs.set_level (Some Info)
+
 let set_level : Logs.level option -> unit = fun level ->
   srcs |> List.iter @@ fun src ->
   Logs.Src.set_level src level
