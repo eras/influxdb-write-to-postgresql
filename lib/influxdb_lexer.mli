@@ -20,8 +20,8 @@ val make_measurement :
   measurement
 
 (** [combine_fields a] returns a measurement which contains the fields
-   of both a and b (not tags nor time), values in b overwriting values
-   in a *)
+    of both a and b (not tags nor time), values in b overwriting values
+    in a *)
 val combine_fields : measurement -> measurement -> measurement
 
 (** [update_timestamp epoch_time measurement] ensure the time field of
@@ -46,4 +46,4 @@ val lines : Sedlexing.lexbuf -> measurement list
 val string_of_tag : string * string -> string
 val string_of_field : string * value -> string
 val string_of_measurement : measurement -> string
-  
+

@@ -260,9 +260,9 @@ let testSendOneRow ctx =
   check_content db_spec
     ("SELECT EXTRACT(EPOCH FROM time), tags->>'tag1', fields->>'field1' FROM meas")
     (fun results ->
-      let printer = [%derive.show: string list list] in
-      assert_equal ~printer ~msg:"Database contents don't match"
-        [["1591514002"; "tag_value_1"; "field_value_1"]] results
+       let printer = [%derive.show: string list list] in
+       assert_equal ~printer ~msg:"Database contents don't match"
+         [["1591514002"; "tag_value_1"; "field_value_1"]] results
     );
   return ()
 
@@ -294,8 +294,8 @@ let testFailingAuth ctx =
   check_content db_spec
     ("SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE table_name='meas'")
     (fun results ->
-      let printer = [%derive.show: string list list] in
-      assert_equal ~printer ~msg:"Expected no data in database" [["0"]] results
+       let printer = [%derive.show: string list list] in
+       assert_equal ~printer ~msg:"Expected no data in database" [["0"]] results
     );
   return ()
 
@@ -308,14 +308,14 @@ let testIncorrectPath ctx =
   check_content db_spec
     ("SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE table_name='meas'")
     (fun results ->
-      let printer = [%derive.show: string list list] in
-      assert_equal ~printer ~msg:"Expected no data in database" [["0"]] results
+       let printer = [%derive.show: string list list] in
+       assert_equal ~printer ~msg:"Expected no data in database" [["0"]] results
     );
   return ()
 
 let suite = "Iw2pg" >::: [
-  "testSendOneRow" >:: OUnitLwt.lwt_wrapper testSendOneRow;
-  "testSendTwoRows" >:: OUnitLwt.lwt_wrapper testSendTwoRows;
-  "testFailingAuth" >:: OUnitLwt.lwt_wrapper testFailingAuth;
-  "testIncorrectPath" >:: OUnitLwt.lwt_wrapper testIncorrectPath;
-]
+    "testSendOneRow" >:: OUnitLwt.lwt_wrapper testSendOneRow;
+    "testSendTwoRows" >:: OUnitLwt.lwt_wrapper testSendTwoRows;
+    "testFailingAuth" >:: OUnitLwt.lwt_wrapper testFailingAuth;
+    "testIncorrectPath" >:: OUnitLwt.lwt_wrapper testIncorrectPath;
+  ]

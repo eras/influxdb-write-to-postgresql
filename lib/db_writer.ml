@@ -330,12 +330,12 @@ struct
     let result = db#exec ~expect:[Pg.Tuples_ok] "SELECT table_name, column_name, data_type FROM INFORMATION_SCHEMA.COLUMNS WHERE table_schema='public'" in
     let database_info = create_database_info () in
     let () = result#get_all_lst |> List.iter @@ function
-    | [table_name; column_name; data_type] ->
-      Hashtbl.find_opt database_info table_name
-      |> Option.value ~default:{ fields = FieldMap.empty }
-      |> map_fields (FieldMap.add column_name (field_type_of_db data_type))
-      |> Hashtbl.replace database_info table_name
-    | _ -> assert false
+      | [table_name; column_name; data_type] ->
+        Hashtbl.find_opt database_info table_name
+        |> Option.value ~default:{ fields = FieldMap.empty }
+        |> map_fields (FieldMap.add column_name (field_type_of_db data_type))
+        |> Hashtbl.replace database_info table_name
+      | _ -> assert false
     in
     database_info
 
@@ -431,7 +431,7 @@ struct
     let command =
       "CREATE TABLE " ^ db_of_identifier table_name ^
       " (" ^ db_concat (((db_pk_columns @ db_field_columns) |> List.map join) @
-                          ["PRIMARY KEY(" ^ db_concat (List.map fst db_pk_columns) ^ ")"]) ^ ")"
+                        ["PRIMARY KEY(" ^ db_concat (List.map fst db_pk_columns) ^ ")"]) ^ ")"
     in
     let table_info = { fields = (pk_columns @ field_columns) |> List.to_seq |> FieldMap.of_seq } in
     { md_command = command;

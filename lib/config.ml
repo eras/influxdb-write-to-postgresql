@@ -79,7 +79,7 @@ let regexp str = Regexp (str, Re.Perl.re str |> Re.compile)
 let regexp_of_yojson =
   let rere = Re.Perl.re "^/(.*)/$" |> Re.compile in
   fun (yojson: Yojson.Safe.t) ->
-  match yojson with
+    match yojson with
     | `String str -> begin
         match Re.exec_opt rere str with
         | None -> Stdlib.Error "Expect regexp of form /regexp/"
@@ -90,7 +90,7 @@ let regexp_of_yojson =
           | Re.Perl.Parse_error -> Stdlib.Error "Failed to parse regexp"
           | Re.Perl.Not_supported -> Stdlib.Error "Regexp feature not supported"
       end
-  | _ -> Stdlib.Error "Expected regexp"
+    | _ -> Stdlib.Error "Expected regexp"
 
 let regexp_to_yojson (Regexp (original, _)) = `String original
 

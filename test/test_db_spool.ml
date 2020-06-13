@@ -20,18 +20,18 @@ CREATE UNIQUE INDEX meas_time_dx ON meas(time);
   let spool = Db_spool.create config in
   (match Db_spool.db spool "default" with
    | None -> assert_failure "Expected to get a database (default) but did not (1)";
-  | Some db -> db.release ());
+   | Some db -> db.release ());
   (match Db_spool.db spool "default" with
    | None -> assert_failure "Expected to get a database (default) but did not (2)";
-  | Some db -> db.release ());
+   | Some db -> db.release ());
   (match Db_spool.db spool "not_there" with
    | None -> ()
    | Some db ->
      db.release ();
      assert_failure "Did not expect to get a database (not_there) but got one";
-     )
+  )
 
 let suite = "Db_spool" >::: [
-  "testGet" >:: testGet;
-  (* "testDb" >:: testDb; *)
-]
+    "testGet" >:: testGet;
+    (* "testDb" >:: testDb; *)
+  ]

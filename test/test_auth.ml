@@ -138,9 +138,9 @@ let testNoAuth _ctx =
   Auth.permitted_header auth ~context ~header
 
 let suite = "Db_auth" >::: [
-  "testPlain" >:: testPlain;
-  "testArgon2" >:: testArgon2;
-  "testBasic" >:: testBasic;
-  "testToken" >:: testToken;
-  "testNoAuth" >:: testNoAuth;
-]
+    "testPlain" >:: testPlain;
+    "testArgon2" >:: testArgon2;
+    "testBasic" >:: testBasic;
+    "testToken" >:: testToken;
+    "testNoAuth" >:: testNoAuth;
+  ]

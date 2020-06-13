@@ -40,8 +40,8 @@ let combine_fields : measurement -> measurement -> measurement = fun a b ->
 let fill_missing_timestamp now (measurement : measurement) =
   match measurement.time with
   | None ->
-      (* "now" is always within the range *)
-      { measurement with time = Some (Int64.of_float (now *. 1000000000.0)); }
+    (* "now" is always within the range *)
+    { measurement with time = Some (Int64.of_float (now *. 1000000000.0)); }
   | Some _ -> measurement
 
 let string_of_tag (name, value) = Printf.sprintf "tag %s=%s" name value
@@ -111,14 +111,14 @@ let unquote_tag_value buf =
       quoted ()
     | _ -> log_raise (Error {info = Parse_error; message = "Expected tag value; received <" ^ Sedlexing.Utf8.lexeme buf ^ ">"})
   and quoted () =
-     match%sedlex buf with
-      | '\\', ('\\' | ' ' | '=' | ',') ->
-        let str = Sedlexing.Utf8.lexeme buf in
-        let letter = String.sub str 1 (String.length str - 1) in
-        Buffer.add_string out letter;
-        loop ()
-      | _ ->
-        Buffer.contents out
+    match%sedlex buf with
+    | '\\', ('\\' | ' ' | '=' | ',') ->
+      let str = Sedlexing.Utf8.lexeme buf in
+      let letter = String.sub str 1 (String.length str - 1) in
+      Buffer.add_string out letter;
+      loop ()
+    | _ ->
+      Buffer.contents out
   in
   loop ()
 
@@ -132,14 +132,14 @@ let unquote_field_value buf =
       quoted ()
     | _ -> log_raise (Error {info = Parse_error; message = "Expected field value; received <" ^ Sedlexing.Utf8.lexeme buf ^ ">"})
   and quoted () =
-     match%sedlex buf with
-      | '\\', ('\\' | '"') ->
-        let str = Sedlexing.Utf8.lexeme buf in
-        let letter = String.sub str 1 (String.length str - 1) in
-        Buffer.add_string out letter;
-        loop ()
-      | _ ->
-        Buffer.contents out
+    match%sedlex buf with
+    | '\\', ('\\' | '"') ->
+      let str = Sedlexing.Utf8.lexeme buf in
+      let letter = String.sub str 1 (String.length str - 1) in
+      Buffer.add_string out letter;
+      loop ()
+    | _ ->
+      Buffer.contents out
   in
   loop ()
 

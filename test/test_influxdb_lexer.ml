@@ -3,7 +3,7 @@ open OUnit2
 module Lexer = Influxdb_write_to_postgresql.Influxdb_lexer
 
 let flip f a b = f b a
-    
+
 let testEmpty _ctx =
   let open Lexer in
   flip assert_raises (fun () ->
@@ -16,7 +16,7 @@ let testOnlyMeasurement _ctx =
       line (Sedlexing.Utf8.from_string {|meas|})
     )
     (Error {info=Parse_error; message="Expected fields"})
-    
+
 let testOnlyMeasurementTime _ctx =
   let open Lexer in
   flip assert_raises (fun () ->
@@ -182,7 +182,7 @@ meas,id=2 field="moi2" 1235|})
   flip assert_equal meas2.tags [("id", {|2|})];
   flip assert_equal meas2.fields [("field", String {|moi2|})];
   flip assert_equal meas2.time (Some 1235L)
-  
+
 let testTwoNoTime _ctx =
   let open Lexer in
   let meas1, meas2 =
@@ -202,25 +202,25 @@ meas,id=2 field="moi2"
   flip assert_equal meas2.tags [("id", {|2|})];
   flip assert_equal meas2.fields [("field", String {|moi2|})];
   flip assert_equal meas2.time None
-  
+
 
 let suite = "Infludb_writer_lexer" >::: [
-  "testEmpty" >:: testEmpty;
-  "testOnlyMeasurement" >:: testOnlyMeasurement;
-  "testOnlyMeasurementTime" >:: testOnlyMeasurementTime;
-  "testOnlyTag" >:: testOnlyTag;
-  "testTypes" >:: testTypes;
-  "testMissingMeasurement1" >:: testMissingMeasurement1;
-  "testMissingMeasurement2" >:: testMissingMeasurement2;
-  "testOnlyFieldInt" >:: testOnlyFieldInt;
-  "testOnlyFieldFloat" >:: testOnlyFieldFloat;
-  "testOnlyFieldString" >:: testOnlyFieldString;
-  "testTagField" >:: testTagField;
-  "testTagFieldNoTime" >:: testTagFieldNoTime;
-  "testTagFields" >:: testTagFields;
-  "testTagsFields" >:: testTagsFields;
-  "testTagQuoting" >:: testTagQuoting;
-  "testValueQuoting" >:: testValueQuoting;
-  "testTwo" >:: testTwo;
-  "testTwoNoTime" >:: testTwoNoTime;
-]
+    "testEmpty" >:: testEmpty;
+    "testOnlyMeasurement" >:: testOnlyMeasurement;
+    "testOnlyMeasurementTime" >:: testOnlyMeasurementTime;
+    "testOnlyTag" >:: testOnlyTag;
+    "testTypes" >:: testTypes;
+    "testMissingMeasurement1" >:: testMissingMeasurement1;
+    "testMissingMeasurement2" >:: testMissingMeasurement2;
+    "testOnlyFieldInt" >:: testOnlyFieldInt;
+    "testOnlyFieldFloat" >:: testOnlyFieldFloat;
+    "testOnlyFieldString" >:: testOnlyFieldString;
+    "testTagField" >:: testTagField;
+    "testTagFieldNoTime" >:: testTagFieldNoTime;
+    "testTagFields" >:: testTagFields;
+    "testTagsFields" >:: testTagsFields;
+    "testTagQuoting" >:: testTagQuoting;
+    "testValueQuoting" >:: testValueQuoting;
+    "testTwo" >:: testTwo;
+    "testTwoNoTime" >:: testTwoNoTime;
+  ]

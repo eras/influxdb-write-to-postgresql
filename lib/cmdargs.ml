@@ -9,11 +9,11 @@ let listen_at =
         let buf = Sedlexing.Utf8.from_string arg in
         match%sedlex buf with
         | Plus ('0'..'9') ->
-            let port = int_of_string (Sedlexing.Utf8.lexeme buf) in
-            if port >= 1 && port <= 65535 then
-              Ok (`TCP (`Port port))
-            else
-              Error (`Msg "Listening port must be in 1..65535")
+          let port = int_of_string (Sedlexing.Utf8.lexeme buf) in
+          if port >= 1 && port <= 65535 then
+            Ok (`TCP (`Port port))
+          else
+            Error (`Msg "Listening port must be in 1..65535")
         | '/', Plus(any) ->
           Ok (`Unix_domain_socket (`File (Sedlexing.Utf8.lexeme buf)))
         | "fd:", Plus('0'..'9') ->

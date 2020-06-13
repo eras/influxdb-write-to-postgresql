@@ -22,16 +22,16 @@ let _testDump _ctx =
           db_password = "plop";
           allowed_users = None;
           create_table = Some {
-            regexp = regexp ".*";
-            method_ = CreateTable;
-          };
+              regexp = regexp ".*";
+              method_ = CreateTable;
+            };
           time_column = None;
           tags_jsonb_column = None;
           tag_columns = None;
           fields_jsonb_column = None;
           field_columns = None;
         });
-      ];
+        ];
       regexp_databases = [];
       realm = "lala";
     }) in
@@ -42,6 +42,6 @@ let testLoad _ctx =
   ()
 
 let suite = "Db_config" >::: [
-  (* "_testDump" >:: _testDump; *)
-  "testLoad" >:: testLoad;
-]
+    (* "_testDump" >:: _testDump; *)
+    "testLoad" >:: testLoad;
+  ]

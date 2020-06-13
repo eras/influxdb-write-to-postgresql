@@ -105,8 +105,8 @@ let testParseCreateUniqueIndexWhere _ctx =
     parsed
 
 let suite = "Db_sql" >::: [
-  "testLexCreateUniqueIndex" >:: testLexCreateUniqueIndex;
-  "testParseCreateUniqueIndex" >:: testParseCreateUniqueIndex;
-  "testParseCreateUniqueIndexFunctional" >:: testParseCreateUniqueIndexFunctional;
-  "testParseCreateUniqueIndexWhere" >:: testParseCreateUniqueIndexWhere;
-]
+    "testLexCreateUniqueIndex" >:: testLexCreateUniqueIndex;
+    "testParseCreateUniqueIndex" >:: testParseCreateUniqueIndex;
+    "testParseCreateUniqueIndexFunctional" >:: testParseCreateUniqueIndexFunctional;
+    "testParseCreateUniqueIndexWhere" >:: testParseCreateUniqueIndexWhere;
+  ]

@@ -5,20 +5,20 @@ struct
 
   let pp_error formatter error =
     let msg = match error with
-    | Wrong_key_size -> "Wrong_key_size"
-    | Wrong_IV_size -> "Wrong_IV_size"
-    | Wrong_data_length -> "Wrong_data_length"
-    | Bad_padding -> "Bad_padding"
-    | Output_buffer_overflow -> "Output_buffer_overflow"
-    | Incompatible_block_size -> "Incompatible_block_size"
-    | Number_too_long -> "Number_too_long"
-    | Seed_too_short -> "Seed_too_short"
-    | Message_too_long -> "Message_too_long"
-    | Bad_encoding -> "Bad_encoding"
-    | Compression_error _ -> "Compression_error"
-    | No_entropy_source -> "No_entropy_source"
-    | Entropy_source_closed -> "Entropy_source_closed"
-    | Compression_not_supported -> "Compression_not_supported"
+      | Wrong_key_size -> "Wrong_key_size"
+      | Wrong_IV_size -> "Wrong_IV_size"
+      | Wrong_data_length -> "Wrong_data_length"
+      | Bad_padding -> "Bad_padding"
+      | Output_buffer_overflow -> "Output_buffer_overflow"
+      | Incompatible_block_size -> "Incompatible_block_size"
+      | Number_too_long -> "Number_too_long"
+      | Seed_too_short -> "Seed_too_short"
+      | Message_too_long -> "Message_too_long"
+      | Bad_encoding -> "Bad_encoding"
+      | Compression_error _ -> "Compression_error"
+      | No_entropy_source -> "No_entropy_source"
+      | Entropy_source_closed -> "Entropy_source_closed"
+      | Compression_not_supported -> "Compression_not_supported"
     in
     Format.pp_print_string formatter msg
 end

@@ -659,26 +659,26 @@ CREATE UNIQUE INDEX meas_time_idx ON meas(time, moi1, moi2);
      Printf.ksprintf assert_failure "Db_writer error: %s" (Db_writer.string_of_error error))
 
 let suite = "Db_writer" >::: [
-  "testCreate" >:: testCreate;
-  "testDbOfIdentifier" >:: testDbOfIdentifier;
-  "testInsert" >:: testInsert;
-  "testInsertNoTime" >:: testInsertNoTime;
-  "testInsertJsonTags" >:: testInsertJsonTags;
-  "testInsertJsonFields" >:: testInsertJsonFields;
-  "testCreateTable" >:: testCreateTable;
-  "testCreateTableJson" >:: testCreateTableJson;
-  "testWrite" >:: testWrite;
-  "testWriteCreateTable1" >:: testWriteCreateTable1;
-  "testWriteCreateTable2" >:: testWriteCreateTable2;
-  "testWriteCreateTable3" >:: testWriteCreateTable3;
-  "testWriteCreateTable4" >:: testWriteCreateTable4;
-  "testWriteNoTime" >:: testWriteNoTime;
-  "testWriteJsonTags" >:: testWriteJsonTags;
-  "testWriteWriteJsonFields" >:: testWriteWriteJsonFields;
-  "testWriteMulti1" >:: testWriteMulti1;
-  "testWriteMulti2" >:: testWriteMulti2;
-  "testWriteMulti3" >:: testWriteMulti3;
-  "testWriteMulti4" >:: testWriteMulti4;
-  "testWriteMultiMany" >:: testWriteMultiMany;
-  "testWriteMultiCoalesce" >:: testWriteMultiCoalesce;
-]
+    "testCreate" >:: testCreate;
+    "testDbOfIdentifier" >:: testDbOfIdentifier;
+    "testInsert" >:: testInsert;
+    "testInsertNoTime" >:: testInsertNoTime;
+    "testInsertJsonTags" >:: testInsertJsonTags;
+    "testInsertJsonFields" >:: testInsertJsonFields;
+    "testCreateTable" >:: testCreateTable;
+    "testCreateTableJson" >:: testCreateTableJson;
+    "testWrite" >:: testWrite;
+    "testWriteCreateTable1" >:: testWriteCreateTable1;
+    "testWriteCreateTable2" >:: testWriteCreateTable2;
+    "testWriteCreateTable3" >:: testWriteCreateTable3;
+    "testWriteCreateTable4" >:: testWriteCreateTable4;
+    "testWriteNoTime" >:: testWriteNoTime;
+    "testWriteJsonTags" >:: testWriteJsonTags;
+    "testWriteWriteJsonFields" >:: testWriteWriteJsonFields;
+    "testWriteMulti1" >:: testWriteMulti1;
+    "testWriteMulti2" >:: testWriteMulti2;
+    "testWriteMulti3" >:: testWriteMulti3;
+    "testWriteMulti4" >:: testWriteMulti4;
+    "testWriteMultiMany" >:: testWriteMultiMany;
+    "testWriteMultiCoalesce" >:: testWriteMultiCoalesce;
+  ]

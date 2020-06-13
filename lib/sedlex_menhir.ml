@@ -14,11 +14,11 @@ type lexbuf = {
 (** Initialize with the null position. *)
 let create_lexbuf ?(file="") stream =
   let pos = {Lexing.
-    pos_fname = file;
-    pos_lnum = 1; (* Start lines at 1, not 0 *)
-    pos_bol = 0;
-    pos_cnum = 0;
-  }
+              pos_fname = file;
+              pos_lnum = 1; (* Start lines at 1, not 0 *)
+              pos_bol = 0;
+              pos_cnum = 0;
+            }
   in { pos ; stream }
 
 (** Register a new line in the lexer's position. *)
@@ -27,8 +27,8 @@ let new_line lexbuf =
   let lcp = lexbuf.pos in
   lexbuf.pos <-
     {lcp with
-       pos_lnum = lcp.pos_lnum + 1;
-       pos_bol = lcp.pos_cnum;
+     pos_lnum = lcp.pos_lnum + 1;
+     pos_bol = lcp.pos_cnum;
     }
 
 (** Update the position with the stream. *)
@@ -75,7 +75,7 @@ let sedlex_with_menhir lexer' parser' lexbuf =
   try
     parser lexer
   with
-    (* | Parser.Error *)
-    | Sedlexing.MalFormed
-    | Sedlexing.InvalidCodepoint _
-      -> raise_ParseError lexbuf
+  (* | Parser.Error *)
+  | Sedlexing.MalFormed
+  | Sedlexing.InvalidCodepoint _
+    -> raise_ParseError lexbuf
