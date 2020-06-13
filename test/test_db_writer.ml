@@ -369,9 +369,9 @@ let testWriteMultiBase ?json_tags ?json_fields ?make_config ?schema ctx =
      Influxdb_lexer.make_measurement
        ~measurement:"meas"
        ~tags:[("moi1", "1");("moi2", "2")]
-       ~fields:[("value", Influxdb_lexer.Int 42L)]
+       ~fields:[("value", Influxdb_lexer.Int 45L)]
        ~time:(Some 1590329952000000000L)]
-    [(1590329952.0, "1", "2", "42")];
+    [(1590329952.0, "1", "2", "45")];
   test_sequence "2"
     [Influxdb_lexer.make_measurement
        ~measurement:"meas"
@@ -383,7 +383,7 @@ let testWriteMultiBase ?json_tags ?json_fields ?make_config ?schema ctx =
        ~tags:[("moi2", "2")]
        ~fields:[("value", Influxdb_lexer.Int 44L)]
        ~time:(Some 1590329952000000000L)]
-    [(1590329952.0, "1", "2", "42");
+    [(1590329952.0, "1", "2", "45");
      (1590329952.0, "1", "",  "43");
      (1590329952.0, "",  "2", "44");
     ]
