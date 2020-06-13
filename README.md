@@ -12,7 +12,7 @@ and converting it to `INSERT` commands to a PostgreSQL database; and
 by extension to a [TimeScaleDB](https://www.timescale.com/).
 
 Basically it listens in some port—8086 by default—and upon receiving a
-connection it reads all the data there is and sends the appriopriate
+connection it reads all the data there is and sends the appropriate
 `INSERT .. ON CONFLICT .. DO UPDATE SET ..` on it within a
 transaction, using `ALTER TABLE tablename ADD COLUMN ..` to add new
 columns as needed (if not using JSONB fields) or even add whole new
@@ -25,7 +25,7 @@ excellent. PostgreSQL/TimeScaleDB also allows storing relational data
 in the same database which can be quite nice for making queries with
 joins.
 
-## Acknowledgements ##
+## Acknowledgments ##
 
 Thanks to #postgresql on FreeNode for advice!
 
@@ -61,7 +61,7 @@ There are three ways to go about setting tables. Either you can
 The default is to also create new tables automatically. You can
 control this with the `create_tables` configuration. If you create the
 tables manually, then you must provide a `UNIQUE INDEX` covering
-`time` column and all the `tags` columns (or that one jsonb
+`time` column and all the `tags` columns (or that one JSONB
 column). The index is used to automatically determine which fields are
 used for the tags.
 
@@ -80,7 +80,7 @@ problem of it requiring recreating the index whenever a new field is
 added; however if it is fine to limit the set of fields beforehand,
 then that may provide the nicest SQL query experience.
 
-Similarly, when puttings tags in separate fields and creating tables
+Similarly, when putting tags in separate fields and creating tables
 manually, you must provide a `UNIQUE INDEX` covering `time` and all
 the `tags`.
 
@@ -104,12 +104,12 @@ the table columns in modern PostgreSQL.
 
 | Data type |
 |---|
-| integer |
-| double precision |
-| numeric |
-| text, varchar |
-| boolean |
-| jsonb |
+| INTEGER |
+| DOUBLE PRECISION |
+| NUMERIC |
+| TEXT, VARCHAR |
+| BOOLEAN |
+| JSONB |
 
 Note that JSONB cannot be used as data per se as the Influxdb line
 protocol doesn't support it.
