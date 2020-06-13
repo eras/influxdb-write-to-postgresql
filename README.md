@@ -25,6 +25,10 @@ excellent. PostgreSQL/TimeScaleDB also allows storing relational data
 in the same database which can be quite nice for making queries with
 joins.
 
+## Acknowledgements ##
+
+Thanks to #postgresql on FreeNode for advice!
+
 ## Configuration ##
 
 Currently the supported [YAML](https://yaml.org) configuration is
