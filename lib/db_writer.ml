@@ -202,7 +202,7 @@ struct
     | None -> db_fields meas
     | Some name -> [db_of_identifier name]
 
-  let db_insert_values t (meas : Influxdb_lexer.measurement) =
+  let db_insert_value_placeholders ?(next_placeholder=1) t (meas : Influxdb_lexer.measurement) =
     let with_enumerate first els =
       let (result, next) =
         (List.fold_left (
@@ -224,15 +224,18 @@ struct
     in
     (* actual values are ignored, only the number of them matters *)
     List.concat [tags; db_names_of_fields t meas]
-    |> with_enumerate 1 |> fst |> Common.map_fst (Printf.sprintf "$%d")
+    |> with_enumerate next_placeholder
+    |> fun (placeholder, next_placeholder) ->
+    placeholder
+    |> Common.map_fst (Printf.sprintf "$%d")
     |> List.map fst
     |>
     match meas.time with
-    | None -> (fun xs -> "CURRENT_TIMESTAMP"::xs)
-    | Some _ -> map_first (fun x -> Printf.sprintf
-                              (match timestamp_method with
-                               | TS_StringTimestamp -> "%s"
-                               | TS_CallTimestamp -> "to_timestamp(%s)") x)
+    | None -> fun xs -> ("CURRENT_TIMESTAMP"::xs, next_placeholder)
+    | Some _ -> fun xs -> (map_first (fun x -> Printf.sprintf
+                                         (match timestamp_method with
+                                          | TS_StringTimestamp -> "%s"
+                                          | TS_CallTimestamp -> "to_timestamp(%s)") x) xs), next_placeholder
 
   let db_insert_fields t meas =
     let tags =
@@ -263,16 +266,33 @@ struct
     | None | Some [] -> raise (Error (NoPrimaryIndexFound meas.measurement))
     | Some (index::_rest) -> index
 
-  let insert_of_measurement t (meas : Influxdb_lexer.measurement) =
-    let query =
-      "INSERT INTO " ^ db_of_identifier meas.measurement ^
-      "(" ^ db_concat (db_insert_fields t meas) ^ ")" ^
-      "\nVALUES (" ^ db_concat (db_insert_values t meas) ^ ")" ^
-      "\nON CONFLICT(" ^ db_concat (conflict_tags t meas) ^ ")" ^
-      "\nDO UPDATE SET " ^ db_update_set t meas
+  let insert_of_measurement ?(measurements:Influxdb_lexer.measurement list option) t (reference : Influxdb_lexer.measurement) =
+    let db_values_placeholders ?next_placeholder meas =
+      let (placeholders, next) = db_insert_value_placeholders ?next_placeholder t meas in
+      ("(" ^ db_concat placeholders ^ ")", next)
     in
-    let params = db_insert_tag_values t meas @ db_insert_field_values t meas in
-    let time =
+    let values =
+      match measurements with
+      | None -> [reference]
+      | Some values -> values
+    in
+    let values_placeholders =
+      List.fold_left
+        (fun (next_placeholder, fields) meas ->
+           let (placeholders, next_placeholder) = db_values_placeholders ~next_placeholder meas in
+           (next_placeholder, placeholders::fields)
+        )
+        (1, [])
+        values |> snd |> List.rev |> String.concat ", "
+    in
+    let query =
+      "INSERT INTO " ^ db_of_identifier reference.measurement ^
+      "(" ^ db_concat (db_insert_fields t reference) ^ ")" ^
+      "\nVALUES " ^ values_placeholders ^
+      "\nON CONFLICT(" ^ db_concat (conflict_tags t reference) ^ ")" ^
+      "\nDO UPDATE SET " ^ db_update_set t reference
+    in
+    let time (meas : Influxdb_lexer.measurement) =
       match meas.time with
       | None -> []
       | Some epoch_time ->
@@ -299,7 +319,12 @@ struct
               else Printf.sprintf "%Ld" seconds
           )]
     in
-    (query, time @ params |> Array.of_list)
+    let params =
+      values
+      |> List.map (fun meas -> time meas @ db_insert_tag_values t meas @ db_insert_field_values t meas)
+      |> List.concat
+    in
+    (query, params |> Array.of_list)
 
   let query_database_info (db: Pg.connection) =
     let result = db#exec ~expect:[Pg.Tuples_ok] "SELECT table_name, column_name, data_type FROM INFORMATION_SCHEMA.COLUMNS WHERE table_schema='public'" in
@@ -551,28 +576,113 @@ let check_and_update_tables (t : t) (measurement : Influxdb_lexer.measurement) =
     | Some _ -> raise (Error (CannotCreateTable { value = table_name;
                                                   reason = "table does not match the regexp" }))
 
+(** [split_longer_lists n xs] splits xs into a list of one or most lists, where each sublist is at most n elements
+    long. *)
+let split_longer_lists (limit : int) (xs : 'a list) : 'a list list =
+  assert (limit > 0);
+  let (_, collect, part) =
+    List.fold_left
+      (fun (n, collect, part) x ->
+         if n < limit
+         then (n + 1, collect, x::part)
+         else (1, List.rev part::collect, [x])
+      )
+      (0, [], [])
+      xs
+  in
+  if part = [] then
+    List.rev collect
+  else
+    List.rev (List.rev part::collect)
+
+let group_measurements t measurements =
+  (* Consider two measurements groupable if they
+     1) affect the same table
+     2) have the same tags
+     3) have the same fields *)
+  let now = Unix.time () in
+  let eq (a : Influxdb_lexer.measurement) (b : Influxdb_lexer.measurement) : bool =
+    a.measurement = b.measurement
+    && List.map fst a.tags = List.map fst b.tags
+    && List.map fst a.fields = List.map fst b.fields
+  in
+  (* But a single insert cannot have multiple rows doing ON CONFLICT DO SET UPDATE..  So we go through the data and
+     if a row has the same time (TODO: convert to timestamp here for exact matching?)+tags, we update the previous
+     entry and remove the later one.  *)
+  let coalesce_updates (measurements : Influxdb_lexer.measurement list) =
+    let key_to_index = Hashtbl.create (List.length measurements) in
+    let index_to_measurement = Hashtbl.create (List.length measurements) in
+    let _ = measurements |> CCList.iteri @@ fun index (measurement : Influxdb_lexer.measurement) ->
+      (* time field needs to be updated here so we can detect collisions between
+         rows that don't specify timestamp and rows that do, and the timestamp
+         happens to match
+      *)
+      let measurement = Influxdb_lexer.fill_missing_timestamp now measurement in
+      Hashtbl.replace index_to_measurement index (ref measurement);
+      let precision_divider =
+        match t.subsecond_time_field with
+        | false -> 1000000000L  (* second precision *)
+        (* TODO: PostgreSQL only supports microsecond precision, so we use that precision here as well. *)
+        | true -> 1000L         (* microsecond precision *)
+      in
+      (* always set due to previous call to fill_missing_timestamp *)
+      let time_key = Int64.(div (Option.get measurement.time) precision_divider) in
+      (* Printf.printf "time_key=%Ld\n%!" time_key; *)
+      let key = (time_key, List.sort compare measurement.tags) in
+      match Hashtbl.find_opt key_to_index key with
+      | None -> Hashtbl.add key_to_index key index;
+      | Some meas_idx ->
+        (* Printf.printf "Foundsies!\n%!"; *)
+        let earlier = Hashtbl.find index_to_measurement meas_idx in
+        (* So keys are the same, we need to merge values and remove this entry *)
+        earlier := Influxdb_lexer.combine_fields !earlier measurement;
+        Hashtbl.remove index_to_measurement index;
+    in
+    index_to_measurement
+    |> Hashtbl.to_seq
+    |> List.of_seq
+    |> List.sort compare
+    |> List.map (fun (_, x) -> !x)
+  in
+  CCList.group_succ ~eq measurements
+  (* split so that no segment results in too many parameters e*)
+  |> List.map (fun xs ->
+      let meas : Influxdb_lexer.measurement = List.hd xs in
+      (* estimate the number of parameters per row *)
+      let num_fields = List.length meas.tags + List.length meas.fields + 1 in
+      (* and keep the number of total parameters in the query < 30000 *)
+      split_longer_lists (30000 / num_fields) xs
+    ) |> List.concat
+  (* ensure no two rows referring to the same row exist in one batch *)
+  |> List.map coalesce_updates
+  (* if something resulted in empty segment, remove them. though nothing should.. *)
+  |> List.filter ((<>) [])
+
 let write t (measurements: Influxdb_lexer.measurement list) =
   try
     ignore (db_exec t.db ~expect:[Pg.Command_ok] "BEGIN TRANSACTION");
-    (* TODO: group requests by their parameters and use multi-value inserts *)
+    let grouped = group_measurements t measurements in
+    (* let grouped = [measurements] in *)
     List.iter (
-      fun measurement ->
+      fun measurements ->
+        assert(measurements <> []);
+        let reference = List.hd measurements in
         Log.debug (fun m ->
-            m "Measurement: %s" (Influxdb_lexer.show_measurement measurement)
+            m "Measurements: %s" ([%derive.show: Influxdb_lexer.measurement list] measurements)
           );
-        let () = check_and_update_tables t measurement in
-        let (query, params) = insert_of_measurement t measurement in
-        let field_types = db_fields_and_types measurement in
-        let tag_types = db_tags_and_types measurement in
-        let () = check_and_update_columns ~kind:`Tags t measurement.measurement tag_types in
-        let () = check_and_update_columns ~kind:`Fields t measurement.measurement field_types in
+        let () = check_and_update_tables t reference in
+        let (query, params) = insert_of_measurement ~measurements t reference in
+        let field_types = db_fields_and_types reference in
+        let tag_types = db_tags_and_types reference in
+        let () = check_and_update_columns ~kind:`Tags t reference.measurement tag_types in
+        let () = check_and_update_columns ~kind:`Fields t reference.measurement field_types in
         try
           ignore (db_exec t.db ~params ~expect:[Pg.Command_ok] query);
         with Pg.Error error ->
           (try ignore (db_exec t.db ~expect:[Pg.Command_ok] "ROLLBACK");
            with Pg.Error _ -> (* ignore *) ());
           raise (Error (PgError (error, Some query)))
-    ) measurements;
+    ) grouped;
     ignore (db_exec t.db ~expect:[Pg.Command_ok] "COMMIT");
   with Pg.Error error ->
     (try ignore (db_exec t.db ~expect:[Pg.Command_ok] "ROLLBACK");

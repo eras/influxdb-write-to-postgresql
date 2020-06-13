@@ -84,7 +84,15 @@ module Internal: sig
   val new_pg_connection : db_spec -> Pg.connection
   val db_of_identifier : string -> string
   val db_of_field_type : field_type -> string
-  val insert_of_measurement : t -> Influxdb_lexer.measurement -> string * string array
+
+  (** [insert_of_measurement ?measurements t reference_measurement] generates the INSERT command for inserting the
+      reference_measurement (or if measurements is provided, the measurements) as well as the required parameters for the
+      command.
+
+      If measurements is provided, it must be similar to reference_measurement in the sense that it they must have the
+      same tags and the same fields and time field must exist or not exist for all of them, no mixing.
+  *)
+  val insert_of_measurement : ?measurements:Influxdb_lexer.measurement list -> t -> Influxdb_lexer.measurement -> string * string array
   val query_database_info : Pg.connection -> database_info
 
   type made_table = {

@@ -24,6 +24,26 @@ let make_measurement ~measurement ~tags ~fields ~time =
   assert (fields <> []);
   { measurement; tags; fields; time }
 
+let combine_fields : measurement -> measurement -> measurement = fun a b ->
+  let module M = Map.Make(String) in
+  { a with
+    fields =
+      let fields_a = a.fields |> List.to_seq |> M.of_seq in
+      let fields =
+        List.fold_left (
+          fun a_fields (b_key, b_value) ->
+            M.add b_key b_value a_fields
+        ) fields_a b.fields
+      in
+      fields |> M.to_seq |> List.of_seq }
+
+let fill_missing_timestamp now (measurement : measurement) =
+  match measurement.time with
+  | None ->
+      (* "now" is always within the range *)
+      { measurement with time = Some (Int64.of_float (now *. 1000000000.0)); }
+  | Some _ -> measurement
+
 let string_of_tag (name, value) = Printf.sprintf "tag %s=%s" name value
 let string_of_field (name, value) = Printf.sprintf "field %s=%s" name (string_of_value value)
 

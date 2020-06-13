@@ -19,6 +19,16 @@ val make_measurement :
   time:int64 option ->
   measurement
 
+(** [combine_fields a] returns a measurement which contains the fields
+   of both a and b (not tags nor time), values in b overwriting values
+   in a *)
+val combine_fields : measurement -> measurement -> measurement
+
+(** [update_timestamp epoch_time measurement] ensure the time field of
+    the measurement is set to the given epoch time value should it be None;
+    otherwise the measurement is returned as-is. *)
+val fill_missing_timestamp : float -> measurement -> measurement
+
 type error_info = Parse_error
 
 type error = {
