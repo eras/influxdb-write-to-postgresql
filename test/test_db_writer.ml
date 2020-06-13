@@ -335,31 +335,10 @@ let testWriteCreateTable4 ctx =
   testWriteBase ~make_config ~json_tags:"tags" ~json_fields:"fields" ?schema ctx;
   testWriteBase ~make_config ~json_tags:"tags" ~json_fields:"fields" ?schema ~duplicate_write:true ctx
 
-let testWriteMultiBase ?json_tags ?json_fields ?make_config ?schema ctx =
-  Test_utils.with_db_writer ?make_config ctx ?schema @@ fun { db; db_spec } ->
-  let db = Lazy.force db in
-  let test_sequence label input all_reference_content =
-    (try
-       ignore (Db_writer.write db input);
-       let direct = Db_writer.Internal.new_pg_connection (Lazy.force db_spec) in
-       let (tags, tag_fields), (fields, fields_fields) = tags_fields json_tags json_fields in
-       assert_tables direct ["meas", ["time"] @ tag_fields @ fields_fields];
-       let query = "SELECT extract(epoch from time), " ^ tags ^ ", " ^ fields ^ " FROM meas" in
-       let result = direct#exec ~expect:[Postgresql.Tuples_ok] query in
-       assert_equal ~printer:string_of_int (List.length all_reference_content) (List.length result#get_all_lst);
-       List.combine (List.sort compare result#get_all_lst) (List.sort compare all_reference_content) |> List.iter @@ function
-       | ([time; moi1; moi2; value], (time', moi1', moi2', value')) ->
-         let time = float_of_string time in
-         assert_equal ~printer:string_of_float time' time;
-         assert_equal ~printer:identity moi1' moi1;
-         assert_equal ~printer:identity moi2' moi2;
-         assert_equal ~printer:identity value' value
-       | _ ->
-         assert_failure "Unexpected columns"
-     with
-     | Db_writer.Error error ->
-       Printf.ksprintf assert_failure "Db_writer error in sequence %s: %s" label (Db_writer.string_of_error error))
-  in
+let base_test_sequence (test_sequence : string ->
+                        Influxdb_lexer.measurement list ->
+                        (float * string * string * string) list -> unit
+                       ) =
   test_sequence "1"
     [Influxdb_lexer.make_measurement
        ~measurement:"meas"
@@ -387,6 +366,34 @@ let testWriteMultiBase ?json_tags ?json_fields ?make_config ?schema ctx =
      (1590329952.0, "1", "",  "43");
      (1590329952.0, "",  "2", "44");
     ]
+
+let testWriteMultiBase ?(test_sequence=base_test_sequence) ?json_tags ?json_fields ?make_config ?schema ctx =
+  Test_utils.with_db_writer ?make_config ctx ?schema @@ fun { db; db_spec } ->
+  let db = Lazy.force db in
+  let test_sequence_op label input all_reference_content =
+    (try
+       ignore (Db_writer.write db input);
+       let direct = Db_writer.Internal.new_pg_connection (Lazy.force db_spec) in
+       let (tags, tag_fields), (fields, fields_fields) = tags_fields json_tags json_fields in
+       assert_tables direct ["meas", ["time"] @ tag_fields @ fields_fields];
+       let query = "SELECT extract(epoch from time), " ^ tags ^ ", " ^ fields ^ " FROM meas" in
+       let result = direct#exec ~expect:[Postgresql.Tuples_ok] query in
+       assert_equal ~msg:"Number of results" ~printer:string_of_int (List.length all_reference_content) (List.length result#get_all_lst);
+       List.combine (List.sort compare result#get_all_lst) (List.sort compare all_reference_content) |> CCList.iteri @@ fun idx -> function
+       | ([time; moi1; moi2; value], (time', moi1', moi2', value')) ->
+         let time = float_of_string time in
+         let label x = "Comparing " ^ x ^ " at " ^ string_of_int idx in
+         assert_equal ~msg:(label "time") ~printer:string_of_float time' time;
+         assert_equal ~msg:(label "moi1") ~printer:identity moi1' moi1;
+         assert_equal ~msg:(label "moi2") ~printer:identity moi2' moi2;
+         assert_equal ~msg:(label "value") ~printer:identity value' value
+       | _ ->
+         assert_failure "Unexpected columns"
+     with
+     | Db_writer.Error error ->
+       Printf.ksprintf assert_failure "Db_writer error in sequence %s: %s" label (Db_writer.string_of_error error))
+  in
+  test_sequence test_sequence_op
 
 let testWriteMulti1 ctx =
   let schema = {|
@@ -445,6 +452,38 @@ let testWriteMulti4 ctx =
     }
   in
   testWriteMultiBase ~make_config ~json_tags:"tags" ~json_fields:"fields" ?schema ctx
+
+let testWriteMultiMany ctx =
+  let schema = None in
+  let make_config db_spec =
+    { Db_writer.db_spec = Lazy.force db_spec;
+      time_column = "time";
+      tags_column = Some "tags";
+      fields_column = Some "fields";
+      create_table =
+        let open Config in
+        Some {
+          regexp = Config.regexp ".*";
+          method_ = CreateTable;
+        }
+    }
+  in
+  let test_sequence test_sequence =
+    let data =
+      CCList.(0 -- 100000) |> List.map @@ fun i ->
+      (Influxdb_lexer.make_measurement
+         ~measurement:"meas"
+         ~tags:[("moi1", "1");("moi2", string_of_int i)]
+         ~fields:[("value", Influxdb_lexer.Int (Int64.of_int (2 * i)))]
+         ~time:(Some Int64.(add 1590329952000000000L (mul 1000000000L (of_int i)))),
+       (1590329952.0 +. float_of_int i, "1", string_of_int i, string_of_int (2 * i)))
+    in
+    let measurements, expected = List.split data in
+    test_sequence "1"
+      measurements
+      expected
+  in
+  testWriteMultiBase ~test_sequence ~make_config ~json_tags:"tags" ~json_fields:"fields" ?schema ctx
 
 let testWriteNoTime ctx =
   let schema = {|
@@ -577,4 +616,5 @@ let suite = "Db_writer" >::: [
   "testWriteMulti2" >:: testWriteMulti2;
   "testWriteMulti3" >:: testWriteMulti3;
   "testWriteMulti4" >:: testWriteMulti4;
+  "testWriteMultiMany" >:: testWriteMultiMany;
 ]
