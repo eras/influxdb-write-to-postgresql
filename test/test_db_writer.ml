@@ -485,6 +485,69 @@ let testWriteMultiMany ctx =
   in
   testWriteMultiBase ~test_sequence ~make_config ~json_tags:"tags" ~json_fields:"fields" ?schema ctx
 
+let testWriteMultiCoalesce ctx =
+  let schema = None in
+  let make_config db_spec =
+    { Db_writer.db_spec = Lazy.force db_spec;
+      time_column = "time";
+      tags_column = Some "tags";
+      fields_column = Some "fields";
+      create_table =
+        let open Config in
+        Some {
+          regexp = Config.regexp ".*";
+          method_ = CreateTable;
+        }
+    }
+  in
+  let test_sequence test_sequence =
+    test_sequence "1"
+      [(Influxdb_lexer.make_measurement
+          ~measurement:"meas"
+          ~tags:[("moi1", "1.1");("moi2", "2.1")]
+          ~fields:[("value", Influxdb_lexer.Int 10L)]
+          ~time:(Some 1590329952000000000L));
+       (Influxdb_lexer.make_measurement
+          ~measurement:"meas"
+          ~tags:[("moi1", "1.1");("moi2", "2.1")]
+          ~fields:[("value", Influxdb_lexer.Int 11L)]
+          ~time:(Some 1590329952000000000L))]
+      [(1590329952.0, "1.1", "2.1", "11")];
+    test_sequence "2"
+      [(Influxdb_lexer.make_measurement
+          ~measurement:"meas"
+          ~tags:[("moi1", "1.2");("moi2", "2.2")]
+          ~fields:[("value", Influxdb_lexer.Int 12L)]
+          ~time:(Some 1590329952000000000L));
+       (Influxdb_lexer.make_measurement
+          ~measurement:"meas"
+          ~tags:[("moi1", "1.2");("moi2", "2.3")]
+          ~fields:[("value", Influxdb_lexer.Int 13L)]
+          ~time:(Some 1590329952000000001L))]
+      [(1590329952.0, "1.1", "2.1", "11");
+       (1590329952.0, "1.2", "2.2", "12");
+       (1590329952.0, "1.2", "2.3", "13");
+      ];
+    test_sequence "3"
+      [(Influxdb_lexer.make_measurement
+          ~measurement:"meas"
+          ~tags:[("moi1", "1.3");("moi2", "2.4")]
+          ~fields:[("value", Influxdb_lexer.Int 14L)]
+          ~time:(Some 1590329953000000000L));
+       (Influxdb_lexer.make_measurement
+          ~measurement:"meas"
+          ~tags:[("moi1", "1.4");("moi2", "2.5")]
+          ~fields:[("value", Influxdb_lexer.Int 15L)]
+          ~time:(Some 1590329954000000001L))]
+      [(1590329952.0, "1.1", "2.1", "11");
+       (1590329952.0, "1.2", "2.2", "12");
+       (1590329952.0, "1.2", "2.3", "13");
+       (1590329953.0, "1.3", "2.4", "14");
+       (1590329954.0, "1.4", "2.5", "15");
+      ];
+  in
+  testWriteMultiBase ~test_sequence ~make_config ~json_tags:"tags" ~json_fields:"fields" ?schema ctx
+
 let testWriteNoTime ctx =
   let schema = {|
 CREATE TABLE meas(time timestamptz NOT NULL, moi1 text NOT NULL DEFAULT(''), moi2 text NOT NULL DEFAULT(''));
@@ -617,4 +680,5 @@ let suite = "Db_writer" >::: [
   "testWriteMulti3" >:: testWriteMulti3;
   "testWriteMulti4" >:: testWriteMulti4;
   "testWriteMultiMany" >:: testWriteMultiMany;
+  "testWriteMultiCoalesce" >:: testWriteMultiCoalesce;
 ]
