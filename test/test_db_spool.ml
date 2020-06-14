@@ -11,7 +11,7 @@ CREATE UNIQUE INDEX meas_time_dx ON meas(time);
   let db_spec = Test_utils.create_new_database_exn ~schema db_spec in
   let db_config = {
     Db_writer.db_spec;
-    time_column = "time";
+    time_method = Config.TimestampTZ { time_field = "time" };
     tags_column = None;
     fields_column = None;
     create_table = None;

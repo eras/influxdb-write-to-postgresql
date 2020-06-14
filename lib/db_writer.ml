@@ -35,7 +35,7 @@ type db_spec =
 type config = {
   db_spec : db_spec;
   create_table : Config.create_table option;
-  time_column : string;
+  time_method : Config.time_method;
   tags_column: string option;   (* using tags column? then this is its name *)
   fields_column: string option;   (* using fields column? then this is its name *)
 }
@@ -99,11 +99,33 @@ open Internal0
 
 let map_fields f table_info = { fields = f table_info.fields }
 
+module Precision : sig
+  type t = private Precision of int64
+  (* val seconds : t *)
+  (* val milliseconds : t *)
+  (* val microseconds : t *)
+  (* val nanoseconds : t *)
+  val of_time_method : Config.time_method -> t
+end = struct
+  type t = Precision of int64
+  let seconds = Precision 1L
+  let milliseconds = Precision 1_000L
+  let microseconds = Precision 1_000_000L
+  let nanoseconds = Precision 1_000_000_000L
+
+  let of_time_method = function
+    | Config.TimestampTZ _ -> seconds
+    | Config.TimestampTZ3 _ -> milliseconds
+    | Config.TimestampTZ6 _ -> microseconds
+    | Config.TimestampTZ9 _ -> nanoseconds
+    | Config.TimestampTZPlusNanos _ -> nanoseconds
+end
+
 type t = {
   mutable db: Pg.connection; (* mutable for reconnecting *)
   quote_mode: quote_mode;
-  quoted_time_field: string;
-  subsecond_time_field: bool;
+  time_fields: string list;
+  time_precision: Precision.t;
   config: config;
   mutable database_info: database_info;
   mutable indices: string list list TableMap.t;
@@ -187,10 +209,26 @@ struct
           )
         ) |> Yojson.to_string]
 
-  let map_first f els =
-    match els with
-    | x::els -> f x::els
-    | els -> els
+  let map_timestamp t els =
+    let map_timefield placeholder =
+      Printf.sprintf
+        (match timestamp_method with
+         | TS_StringTimestamp -> "%s"
+         | TS_CallTimestamp -> "to_timestamp(%s)") placeholder
+    in
+    let aux els =
+      match els, List.length t.time_fields with
+      | ph::els, 1 -> map_timefield ph::els
+      | ph1::ph2::els, 2 -> map_timefield ph1::ph2::els
+      | els, _ -> els
+    in
+    aux els
+
+  let make_timestamp t xs =
+    (match t.time_fields with
+     | [_] -> ["CURRENT_TIMESTAMP"]
+     | [_; _] -> ["CURRENT_TIMESTAMP"; "0"]
+     | _ -> assert false) @ xs
 
   let db_names_of_tags_exn t meas=
     match t.config.tags_column with
@@ -202,7 +240,7 @@ struct
     | None -> db_fields_exn meas
     | Some name -> [db_of_identifier_exn name]
 
-  let db_insert_value_placeholders ?(next_placeholder=1) t (meas : Influxdb_lexer.measurement) =
+  let db_insert_value_placeholders_exn ?(next_placeholder=1) t (meas : Influxdb_lexer.measurement) =
     let with_enumerate first els =
       let (result, next) =
         (List.fold_left (
@@ -212,30 +250,25 @@ struct
       in
       (List.rev result, next)
     in
-    let tags =
+    let time_and_tags =
       let time =
         match meas.time with
         | None -> []
-        | Some _ -> ["time"]
+        | Some _ -> t.time_fields
       in
-      List.append
-        time
-        (db_names_of_tags_exn t meas)
+      time @ db_names_of_tags_exn t meas
     in
     (* actual values are ignored, only the number of them matters *)
-    List.concat [tags; db_names_of_fields_exn t meas]
+    List.concat [time_and_tags; db_names_of_fields_exn t meas]
     |> with_enumerate next_placeholder
     |> fun (placeholder, next_placeholder) ->
     placeholder
     |> Common.map_fst (Printf.sprintf "$%d")
     |> List.map fst
-    |>
+    |> fun xs ->
     match meas.time with
-    | None -> fun xs -> ("CURRENT_TIMESTAMP"::xs, next_placeholder)
-    | Some _ -> fun xs -> (map_first (fun x -> Printf.sprintf
-                                         (match timestamp_method with
-                                          | TS_StringTimestamp -> "%s"
-                                          | TS_CallTimestamp -> "to_timestamp(%s)") x) xs), next_placeholder
+    | None -> (make_timestamp t xs, next_placeholder)
+    | Some _ -> (map_timestamp t xs, next_placeholder)
 
   let db_insert_fields_exn t meas =
     let tags =
@@ -248,7 +281,7 @@ struct
       | None -> db_fields_exn meas
       | Some fields -> [db_of_identifier_exn fields]
     in
-    List.concat [[t.quoted_time_field]; tags; fields]
+    List.concat [List.map db_of_identifier_exn t.time_fields; tags; fields]
 
   let db_update_set_exn t meas =
     match t.config.fields_column with
@@ -268,7 +301,7 @@ struct
 
   let insert_of_measurement_exn ?(measurements:Influxdb_lexer.measurement list option) t (reference : Influxdb_lexer.measurement) =
     let db_values_placeholders ?next_placeholder meas =
-      let (placeholders, next) = db_insert_value_placeholders ?next_placeholder t meas in
+      let (placeholders, next) = db_insert_value_placeholders_exn ?next_placeholder t meas in
       ("(" ^ db_concat placeholders ^ ")", next)
     in
     let values =
@@ -293,31 +326,35 @@ struct
       "\nDO UPDATE SET " ^ db_update_set_exn t reference
     in
     let time (meas : Influxdb_lexer.measurement) =
+      let fields base nanoseconds =
+        match timestamp_method, t.time_fields with
+        | TS_StringTimestamp, [_] -> [Printf.sprintf "%s.%09Ld UTC" base nanoseconds]
+        | TS_StringTimestamp, [_; _] -> [Printf.sprintf "%s UTC" base;
+                                         Printf.sprintf "%Ld" nanoseconds]
+        | TS_CallTimestamp, [_] -> [Printf.sprintf "%s.%09Ld" base nanoseconds]
+        | TS_CallTimestamp, [_; _] -> [base;
+                                       Printf.sprintf "%Ld" nanoseconds]
+        | (TS_StringTimestamp | TS_CallTimestamp), _ -> assert false
+      in
       match meas.time with
       | None -> []
-      | Some epoch_time ->
-        [Printf.sprintf "%s" (
-            let seconds = Int64.div epoch_time 1000000000L in
-            let microseconds = Int64.(div (rem epoch_time 1000000000L) 1000L) in
-            match timestamp_method with
-            | TS_StringTimestamp ->
-              let date_str =
-                let netdate_t_utc = Netdate.create ~zone:0 (Int64.to_float seconds) in
-                Netdate.format netdate_t_utc ~fmt:"%Y-%m-%d %H:%M:%S"
-              in
-              (* TODO: what about negative values? Check that 'rem' works as
-                 expected *)
-              (* TODO: PostgreSQL only supports microseconds, so this can cause
-                 data loss until the overflow precision finds a storage *)
-              let microseconds = Int64.(div (rem epoch_time 1000000000L) 1000L) in
-              if t.subsecond_time_field
-              then Printf.sprintf "%s.%06Ld UTC" date_str microseconds
-              else Printf.sprintf "%s UTC" date_str
-            | TS_CallTimestamp ->
-              if t.subsecond_time_field
-              then Printf.sprintf "%Ld.%06Ld" seconds microseconds
-              else Printf.sprintf "%Ld" seconds
-          )]
+      | Some epoch_time -> begin
+        let seconds = Int64.div epoch_time 1000000000L in
+        let nanoseconds = Int64.(rem epoch_time 1000000000L) in
+        match timestamp_method with
+        | TS_StringTimestamp ->
+          let date_str =
+            let netdate_t_utc = Netdate.create ~zone:0 (Int64.to_float seconds) in
+            Netdate.format netdate_t_utc ~fmt:"%Y-%m-%d %H:%M:%S"
+          in
+          (* TODO: what about negative values? Check that 'rem' works as
+             expected *)
+          (* TODO: PostgreSQL only supports microseconds, so this can cause
+             data loss until the overflow precision finds a storage *)
+          fields date_str nanoseconds
+        | TS_CallTimestamp ->
+          fields (Int64.to_string seconds) nanoseconds
+      end
     in
     let params =
       values
@@ -406,7 +443,11 @@ struct
     in
     let db_field_columns = field_columns |> List.map dbify in
     let pk_columns =
-      (db_of_identifier_exn t.config.time_column, FT_Timestamptz)::
+      (match List.map db_of_identifier_exn t.time_fields with
+       | [timestamp] -> [(timestamp, FT_Timestamptz)]
+       | [timestamp; nanos] -> [(timestamp, FT_Timestamptz);
+                                (nanos, FT_Int)]
+       | _ -> assert false) @
       (match t.config.tags_column with
        | None -> (db_tags_and_types measurement)
        | Some tags -> [(tags, FT_Jsonb)])
@@ -417,7 +458,16 @@ struct
       let snd_lens f (a, b) = (a, f b) in
       pk_columns |> List.map (map2_zip identity dbify) |>
       List.map (snd_lens (snd_lens not_null)) |>
-      Common.map_rest
+      (* TODO: not very pretty. perhaps some more general concept about fields would help here. *)
+      (match t.time_fields with
+       | [_] -> Common.map_rest
+       | [_; _] ->
+         let map_rest2 map_heads map_rest xs =
+           map_heads (List.hd xs)::Common.map_rest map_heads map_rest (List.tl xs)
+         in
+         map_rest2
+       | _ -> failwith "Expected exactly one or two time fields"
+      )
         snd
         (fun ((_name, field_type), (db_name, db_type)) ->
            (db_name, default (
@@ -452,24 +502,31 @@ let db_spec_of_database : Config.database -> db_spec =
   }
 
 let db_config_of_database : Config.database -> config =
-  fun ({ Config.time_column; tags_jsonb_column; fields_jsonb_column; create_table; _ } as database) ->
+  fun ({ Config.time; tags_jsonb_column; fields_jsonb_column; create_table; _ } as database) ->
   let db_spec = db_spec_of_database database in
   { db_spec;
-    time_column = Option.value time_column ~default:"time";
+    time_method = time;
     tags_column = tags_jsonb_column;
     fields_column = fields_jsonb_column;
     create_table; }
+
+let time_columns_of_time_method = function
+  | Config.TimestampTZ { time_field }
+  | Config.TimestampTZ3 { time_field }
+  | Config.TimestampTZ6 { time_field }
+  | Config.TimestampTZ9 { time_field } -> [time_field]
+  | Config.TimestampTZPlusNanos { time_field; nano_field } -> [time_field; nano_field]
 
 let create_exn (config : config) =
   try
     let db = new_pg_connection_exn config.db_spec in
     let quote_mode = QuoteAlways in
-    let quoted_time_field = db_of_identifier_exn (config.time_column) in
-    let subsecond_time_field = false in
+    let time_fields = time_columns_of_time_method config.time_method in
+    let time_precision = Precision.of_time_method config.time_method in
     let database_info = query_database_info_exn db in
     let indices = query_indices_exn db |> TableMap.of_seq in
-    { db; quote_mode; quoted_time_field; subsecond_time_field;
-      database_info; indices;
+    { db; quote_mode; time_fields;
+      time_precision; database_info; indices;
       config }
   with Pg.Error error ->
     raise (Error (PgError (error, None)))
@@ -559,7 +616,7 @@ let check_and_update_tables_exn (t : t) (measurement : Influxdb_lexer.measuremen
     in
     let make_hypertable () =
       let command = "SELECT create_hypertable($1, $2)" in
-      let params = [|table_name; t.config.time_column|] in
+      let params = table_name::t.time_fields |> Array.of_list in
       ignore (db_exec_exn t.db ~expect:[Pg.Tuples_ok] ~params command)
     in
     match t.config.create_table with
@@ -619,12 +676,7 @@ let group_measurements t measurements =
       *)
       let measurement = Influxdb_lexer.fill_missing_timestamp now measurement in
       Hashtbl.replace index_to_measurement index (ref measurement);
-      let precision_divider =
-        match t.subsecond_time_field with
-        | false -> 1000000000L  (* second precision *)
-        (* TODO: PostgreSQL only supports microsecond precision, so we use that precision here as well. *)
-        | true -> 1000L         (* microsecond precision *)
-      in
+      let Precision.Precision precision_divider = t.time_precision in
       (* always set due to previous call to fill_missing_timestamp *)
       let time_key = Int64.(div (Option.get measurement.time) precision_divider) in
       (* Printf.printf "time_key=%Ld\n%!" time_key; *)

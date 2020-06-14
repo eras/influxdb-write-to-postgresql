@@ -176,7 +176,7 @@ let with_new_db ?container_info ?db_spec_format ctx schema f =
 
 let make_db_writer_config db_spec =
   { Db_writer.db_spec = Lazy.force db_spec;
-    time_column = "time";
+    time_method = Config.TimestampTZ { time_field = "time" };
     tags_column = None;
     fields_column = None;
     create_table = None; }

@@ -40,7 +40,71 @@ CREATE UNIQUE INDEX meas_time_idx ON meas(time, moi1, moi2);
 VALUES (to_timestamp($1), $2, $3, $4)
 ON CONFLICT(time, moi1, moi2)
 DO UPDATE SET value=excluded.value|} (fst query);
-  assert_equal ~printer:(fun x -> Array.to_list x |> String.concat ",") (snd query) [|"1590329952"; "1"; "2"; "42"|]
+  assert_equal ~printer:(fun x -> Array.to_list x |> String.concat ",") (snd query) [|"1590329952.000000000"; "1"; "2"; "42"|]
+
+let testInsertTimestampTZ6 ctx =
+  let schema = {|
+CREATE TABLE meas(time timestamptz(6) NOT NULL,
+                  moi1 text NOT NULL DEFAULT(''),
+                  moi2 text NOT NULL DEFAULT(''));
+CREATE UNIQUE INDEX meas_time_idx ON meas(time, moi1, moi2);
+|} in
+  let make_config db_spec =
+    { Db_writer.db_spec = Lazy.force db_spec;
+      time_method = Config.TimestampTZ6 { time_field = "time" };
+      tags_column = None;
+      fields_column = None;
+      create_table = None;
+    }
+  in
+  Test_utils.with_db_writer ~make_config ctx ~schema @@ fun { db; _ } ->
+  let db = Lazy.force db in
+  let meas =
+    Influxdb_lexer.make_measurement
+      ~measurement:"meas"
+      ~tags:[("moi1", "1");("moi2", "2")]
+      ~fields:[("value", Influxdb_lexer.Int 42L)]
+      ~time:(Some 1590329952123456000L)
+  in
+  let query = Db_writer.Internal.insert_of_measurement_exn db meas in
+  assert_equal ~printer:identity {|INSERT INTO meas(time, moi1, moi2, value)
+VALUES (to_timestamp($1), $2, $3, $4)
+ON CONFLICT(time, moi1, moi2)
+DO UPDATE SET value=excluded.value|} (fst query);
+  assert_equal ~printer:(fun x -> Array.to_list x |> String.concat ",") (snd query) [|"1590329952.123456000"; "1"; "2"; "42"|]
+
+let testInsertTimestampTZNanos ctx =
+  let schema = {|
+CREATE TABLE meas(time timestamptz(6) NOT NULL,
+                  nanoseconds INTEGER NOT NULL,
+                  moi1 text NOT NULL DEFAULT(''),
+                  moi2 text NOT NULL DEFAULT(''));
+CREATE UNIQUE INDEX meas_time_idx ON meas(time, nanoseconds, moi1, moi2);
+|} in
+  let make_config db_spec =
+    { Db_writer.db_spec = Lazy.force db_spec;
+      time_method = Config.TimestampTZPlusNanos { time_field = "time";
+                                                  nano_field = "nanoseconds" };
+      tags_column = None;
+      fields_column = None;
+      create_table = None;
+    }
+  in
+  Test_utils.with_db_writer ~make_config ctx ~schema @@ fun { db; _ } ->
+  let db = Lazy.force db in
+  let meas =
+    Influxdb_lexer.make_measurement
+      ~measurement:"meas"
+      ~tags:[("moi1", "1");("moi2", "2")]
+      ~fields:[("value", Influxdb_lexer.Int 42L)]
+      ~time:(Some 1590329952123456789L)
+  in
+  let query = Db_writer.Internal.insert_of_measurement_exn db meas in
+  assert_equal ~printer:identity {|INSERT INTO meas(time, nanoseconds, moi1, moi2, value)
+VALUES (to_timestamp($1), $2, $3, $4, $5)
+ON CONFLICT(time, nanoseconds, moi1, moi2)
+DO UPDATE SET value=excluded.value|} (fst query);
+  assert_equal ~printer:[%derive.show: string array] [|"1590329952"; "123456789"; "1"; "2"; "42"|] (snd query)
 
 let string_of_key_field_type (str, field_type) =
   str ^ " " ^ Db_writer.Internal.db_of_field_type field_type
@@ -94,7 +158,7 @@ CREATE UNIQUE INDEX meas_time_idx ON meas(time, moi1, moi2);
 |} in
   let make_config db_spec =
     { Db_writer.db_spec = Lazy.force db_spec;
-      time_column = "time";
+      time_method = Config.TimestampTZ { time_field = "time" };
       tags_column = Some "tags";
       fields_column = Some "fields";
       create_table = None;
@@ -122,6 +186,53 @@ CREATE UNIQUE INDEX meas_time_idx ON meas(time, moi1, moi2);
     (let open Db_writer.Internal in
      [("fields", FT_Jsonb);
       ("tags", FT_Jsonb);
+      ("time", FT_Timestamptz);
+     ])
+    (table_info.fields |> Db_writer.Internal.FieldMap.to_seq |> List.of_seq |> List.sort compare)
+
+let testCreateTableNanos ctx =
+  let schema = {|
+CREATE TABLE meas(time timestamptz NOT NULL,
+                  nanoseconds INTEGER NOT NULL,
+                  moi1 text NOT NULL DEFAULT(''),
+                  moi2 text NOT NULL DEFAULT(''));
+CREATE UNIQUE INDEX meas_time_idx ON meas(time, moi1, moi2);
+|} in
+  let make_config db_spec =
+    { Db_writer.db_spec = Lazy.force db_spec;
+      time_method = Config.TimestampTZPlusNanos { time_field = "time"; nano_field = "nanoseconds" };
+      tags_column = None;
+      fields_column = None;
+      create_table = None;
+    }
+  in
+  Test_utils.with_db_writer ~make_config ctx ~schema @@ fun { db; _ } ->
+  let db = Lazy.force db in
+  let meas =
+    Influxdb_lexer.make_measurement
+      ~measurement:"meas"
+      ~tags:[("moi1", "");("moi2", "2")]
+      ~fields:[("k_int", Influxdb_lexer.Int 42L);
+               ("k_float", Influxdb_lexer.FloatNum 42.0);
+               ("k_string", Influxdb_lexer.String "42");
+               ("k_bool", Influxdb_lexer.Boolean true);]
+      ~time:(Some 1590329952000000000L)
+  in
+  let { Db_writer.Internal.md_command = query; md_table_info = table_info; _ } =
+    Db_writer.Internal.make_table_command_exn db meas in
+  assert_equal ~printer:identity
+    {|CREATE TABLE meas (time timestamptz NOT NULL, nanoseconds integer NOT NULL, moi1 text NOT NULL DEFAULT(''), moi2 text NOT NULL DEFAULT(''), k_int integer, k_float double precision, k_string text, k_bool boolean, PRIMARY KEY(time, nanoseconds, moi1, moi2))|}
+    query;
+  assert_equal
+    ~printer:(string_of_list string_of_key_field_type)
+    (let open Db_writer.Internal in
+     [("k_bool", FT_Boolean);
+      ("k_float", FT_Float);
+      ("k_int", FT_Int);
+      ("k_string", FT_String);
+      ("moi1", FT_String);
+      ("moi2", FT_String);
+      ("nanoseconds", FT_Int);
       ("time", FT_Timestamptz);
      ])
     (table_info.fields |> Db_writer.Internal.FieldMap.to_seq |> List.of_seq |> List.sort compare)
@@ -156,7 +267,7 @@ CREATE UNIQUE INDEX meas_time_idx ON meas(time, tags);
 |} in
   let make_config db_spec =
     { Db_writer.db_spec = Lazy.force db_spec;
-      time_column = "time";
+      time_method = Config.TimestampTZ { time_field = "time" };
       tags_column = Some "tags";
       fields_column = None;
       create_table = None;
@@ -177,7 +288,7 @@ VALUES (to_timestamp($1), $2, $3)
 ON CONFLICT(time, tags)
 DO UPDATE SET value=excluded.value|} (fst query);
   assert_equal ~printer:(fun x -> Array.to_list x |> String.concat ",")
-    [|"1590329952"; {|{"moi1":"1","moi2":"2"}|}; "42"|] (snd query)
+    [|"1590329952.000000000"; {|{"moi1":"1","moi2":"2"}|}; "42"|] (snd query)
 
 let testInsertJsonFields ctx =
   let schema = {|
@@ -186,7 +297,7 @@ CREATE UNIQUE INDEX meas_time_idx ON meas(time, moi1, moi2);
 |} in
   let make_config db_spec =
     { Db_writer.db_spec = Lazy.force db_spec;
-      time_column = "time";
+      time_method = Config.TimestampTZ { time_field = "time" };
       tags_column = None;
       fields_column = Some "fields";
       create_table = None;
@@ -206,7 +317,7 @@ CREATE UNIQUE INDEX meas_time_idx ON meas(time, moi1, moi2);
 VALUES (to_timestamp($1), $2, $3, $4)
 ON CONFLICT(time, moi1, moi2)
 DO UPDATE SET fields=meas.fields||excluded.fields|} (fst query);
-  assert_equal ~printer:(fun x -> Array.to_list x |> String.concat ",") [|"1590329952"; "1"; "2"; {|{"value":42}|}|]
+  assert_equal ~printer:(fun x -> Array.to_list x |> String.concat ",") [|"1590329952.000000000"; "1"; "2"; {|{"value":42}|}|]
     (snd query)
 
 let assert_tables_exn db expect =
@@ -285,7 +396,7 @@ let testWriteCreateTable2 ctx =
   let schema = None in
   let make_config db_spec =
     { Db_writer.db_spec = Lazy.force db_spec;
-      time_column = "time";
+      time_method = Config.TimestampTZ { time_field = "time" };
       tags_column = None;
       fields_column = None;
       create_table =
@@ -303,7 +414,7 @@ let testWriteCreateTable3 ctx =
   let schema = None in
   let make_config db_spec =
     { Db_writer.db_spec = Lazy.force db_spec;
-      time_column = "time";
+      time_method = Config.TimestampTZ { time_field = "time" };
       tags_column = Some "tags";
       fields_column = None;
       create_table =
@@ -321,7 +432,7 @@ let testWriteCreateTable4 ctx =
   let schema = None in
   let make_config db_spec =
     { Db_writer.db_spec = Lazy.force db_spec;
-      time_column = "time";
+      time_method = Config.TimestampTZ { time_field = "time" };
       tags_column = Some "tags";
       fields_column = Some "fields";
       create_table =
@@ -406,7 +517,7 @@ let testWriteMulti2 ctx =
   let schema = None in
   let make_config db_spec =
     { Db_writer.db_spec = Lazy.force db_spec;
-      time_column = "time";
+      time_method = Config.TimestampTZ { time_field = "time" };
       tags_column = None;
       fields_column = None;
       create_table =
@@ -423,7 +534,7 @@ let testWriteMulti3 ctx =
   let schema = None in
   let make_config db_spec =
     { Db_writer.db_spec = Lazy.force db_spec;
-      time_column = "time";
+      time_method = Config.TimestampTZ { time_field = "time" };
       tags_column = Some "tags";
       fields_column = None;
       create_table =
@@ -440,7 +551,7 @@ let testWriteMulti4 ctx =
   let schema = None in
   let make_config db_spec =
     { Db_writer.db_spec = Lazy.force db_spec;
-      time_column = "time";
+      time_method = Config.TimestampTZ { time_field = "time" };
       tags_column = Some "tags";
       fields_column = Some "fields";
       create_table =
@@ -457,7 +568,7 @@ let testWriteMultiMany ctx =
   let schema = None in
   let make_config db_spec =
     { Db_writer.db_spec = Lazy.force db_spec;
-      time_column = "time";
+      time_method = Config.TimestampTZ { time_field = "time" };
       tags_column = Some "tags";
       fields_column = Some "fields";
       create_table =
@@ -489,7 +600,7 @@ let testWriteMultiCoalesce ctx =
   let schema = None in
   let make_config db_spec =
     { Db_writer.db_spec = Lazy.force db_spec;
-      time_column = "time";
+      time_method = Config.TimestampTZ { time_field = "time" };
       tags_column = Some "tags";
       fields_column = Some "fields";
       create_table =
@@ -587,7 +698,7 @@ CREATE UNIQUE INDEX meas_time_idx ON meas(time, tags);
 |} in
   let make_config db_spec =
     { Db_writer.db_spec = Lazy.force db_spec;
-      time_column = "time";
+      time_method = Config.TimestampTZ { time_field = "time" };
       tags_column = Some "tags";
       fields_column = None;
       create_table = None;
@@ -626,7 +737,7 @@ CREATE UNIQUE INDEX meas_time_idx ON meas(time, moi1, moi2);
 |} in
   let make_config db_spec =
     { Db_writer.db_spec = Lazy.force db_spec;
-      time_column = "time";
+      time_method = Config.TimestampTZ { time_field = "time" };
       tags_column = None;
       fields_column = Some "fields";
       create_table = None;
@@ -665,8 +776,11 @@ let suite = "Db_writer" >::: [
     "testInsertNoTime" >:: testInsertNoTime;
     "testInsertJsonTags" >:: testInsertJsonTags;
     "testInsertJsonFields" >:: testInsertJsonFields;
+    "testInsertTimestampTZ6" >:: testInsertTimestampTZ6;
+    "testInsertTimestampTZNanos" >:: testInsertTimestampTZNanos;
     "testCreateTable" >:: testCreateTable;
     "testCreateTableJson" >:: testCreateTableJson;
+    "testCreateTableNanos" >:: testCreateTableNanos;
     "testWrite" >:: testWrite;
     "testWriteCreateTable1" >:: testWriteCreateTable1;
     "testWriteCreateTable2" >:: testWriteCreateTable2;

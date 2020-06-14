@@ -1,5 +1,38 @@
 module TableMap = Map.Make(String)
 
+(*
+   Convert json from
+
+   ["key", [{"key1":"value1", "key2":"value2"}]]
+   and
+   ["key"]
+
+   to
+   {"key": {"key1":"value1", "key2":"value2"}}
+   and
+   "key"
+
+   correspondingly. And vice versa.
+*)
+
+(** [wrap_sum_type_to_yojson to_yojson] converts to_yojson generated for a sum type to use a top-level associative table
+   instead of a plain `List like it does by default. If there are no parameters, it's converted to a plain `String. *)
+let wrap_sum_type_to_yojson (to_yojson : 'a -> Yojson.Safe.t) (value : 'a) : Yojson.Safe.t =
+  match to_yojson value with
+  | `List [`String name; `Assoc kvs] -> `Assoc [name, `Assoc kvs]
+  | `List [`String name] -> `String name
+  | _ -> assert false
+
+(** [wrap_sum_type_to_yojson label of_yojson] does the inverse conversion for wrap_sum_type_to_yojson
+
+    label is used for error message, should the format not follow the expected.
+*)
+let wrap_sum_type_of_yojson (label : string) (of_yojson : Yojson.Safe.t -> 'a) (yojson : Yojson.Safe.t) : 'a =
+  match yojson with
+  | `Assoc [name, `Assoc kvs] -> of_yojson (`List [`String name; `Assoc kvs])
+  | `String name -> of_yojson (`List [`String name])
+  | _ -> Stdlib.Error ("Unexpected structure for " ^ label)
+
 type error =
   | CannotParseConfig of string
   | CannotProcessConfig of string
@@ -99,6 +132,16 @@ type create_table = {
   method_: create_table_method [@key "method"]
 } [@@deriving yojson]
 
+type time_method =
+  | TimestampTZ of { time_field: string } [@name "seconds"]
+  | TimestampTZ3 of { time_field: string } [@name "milliseconds"]
+  | TimestampTZ6 of { time_field: string } [@name "microseconds"]
+  | TimestampTZ9 of { time_field: string } [@name "nanoseconds"]
+  | TimestampTZPlusNanos of { time_field: string; nano_field: string } [@name "tz+nanoseconds"]
+[@@deriving yojson]
+let time_method_to_yojson = wrap_sum_type_to_yojson time_method_to_yojson
+let time_method_of_yojson = wrap_sum_type_of_yojson "time_method" time_method_of_yojson
+
 type database = {
   db_name: string;
 
@@ -112,7 +155,8 @@ type database = {
 
   create_table: (create_table option [@default Some { regexp = regexp ".+"; method_ = CreateTable }]);
 
-  time_column: (string option [@default Some "time"]);
+  time : time_method [@default TimestampTZ6 { time_field = "time" }];
+
   tags_jsonb_column: (string option [@default Some "tags"]);
 
   tag_columns: (string list option [@default None]);

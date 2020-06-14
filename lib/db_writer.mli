@@ -32,7 +32,7 @@ type db_spec =
 type config = {
   db_spec : db_spec;
   create_table : Config.create_table option;
-  time_column : string;
+  time_method : Config.time_method;
   tags_column: string option;   (* using tags column? then this is its name *)
   fields_column: string option;   (* using fields column? then this is its name *)
 }

@@ -37,8 +37,18 @@ databases:
       regexp: /.+/
       method: create_table # default is create_table. use create_hypertable for TimeScaleDB
 
-    # # set the time column, defaults to "time"
-    # time_column: time
+    # # set the time precision and column.
+    # # The default precision is microseconds, which is the highest precision
+    # # PostgreSQL supports while influxdb protocol uses nanoseconds.
+    # time:
+    #   seconds # can be: seconds, milliseconds, microseconds
+    #     time_field: time
+
+    # # a two-field alternative with nanosecond precision
+    # time:
+    #   tz+nanoseconds
+    #     time_field: time
+    #     nano_field: nanoseconds
 
     # # set the name of tags column defaults to "tags"
     # tags_jsonb_column: tags

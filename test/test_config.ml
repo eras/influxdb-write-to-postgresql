@@ -25,7 +25,8 @@ let _testDump _ctx =
               regexp = regexp ".*";
               method_ = CreateTable;
             };
-          time_column = None;
+          time = TimestampTZPlusNanos { time_field = "time";
+                                        nano_field = "nanos" };
           tags_jsonb_column = None;
           tag_columns = None;
           fields_jsonb_column = None;

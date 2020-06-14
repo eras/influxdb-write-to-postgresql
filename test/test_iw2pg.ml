@@ -7,7 +7,15 @@ let take_db_info db_spec =
   | Db_writer.DbInfo info -> info
   | _ -> assert false
 
-let make_config db_spec ~influxdb_name ~authentication =
+let make_config ?(time=Config.TimestampTZ { time_field = "time" }) db_spec ~influxdb_name ~authentication =
+  let time_json = match time with
+    | Config.TimestampTZ { time_field } -> `O [("seconds", `O [("time_field", `String time_field)])]
+    | Config.TimestampTZ3 { time_field } -> `O [("milliseconds", `O [("time_field", `String time_field)])]
+    | Config.TimestampTZ6 { time_field } -> `O [("microseconds", `O [("time_field", `String time_field)])]
+    | Config.TimestampTZ9 { time_field } -> `O [("nanoseconds", `O [("time_field", `String time_field)])]
+    | Config.TimestampTZPlusNanos { time_field; nano_field } -> `O [("tz+nanoseconds", `O [("time_field", `String time_field);
+                                                                                           ("nano_field", `String nano_field)])]
+  in
   let db_spec = take_db_info db_spec in
   `O ["users", `O ["testuser",
                    `O ["password", `O ["type", `String "plain";
@@ -18,6 +26,7 @@ let make_config db_spec ~influxdb_name ~authentication =
                            "db_user", `String db_spec.db_user;
                            "db_password", `String db_spec.db_password;
                            "db_name", `String db_spec.db_name;
+                           "time", time_json;
                            (* "create_table", `O ["regexp", `String {|/^.+$/|};
                             *                     "method", `A [`String "CreateTable"]]; *)
                            (* "time_column", `String "time"; *)

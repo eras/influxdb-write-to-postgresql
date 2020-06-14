@@ -44,6 +44,13 @@ type create_table = {
   method_: create_table_method
 }
 
+type time_method =
+  | TimestampTZ of { time_field: string }       (* second precision *)
+  | TimestampTZ3 of { time_field: string }      (* millisecond precision *)
+  | TimestampTZ6 of { time_field: string }      (* microsecond precision *)
+  | TimestampTZ9 of { time_field: string }      (* nanosecond precision *)
+  | TimestampTZPlusNanos of { time_field: string; nano_field: string } (* second precision + another field for nanoseconds *)
+
 type database = {
   db_name : string;
   db_host : string;
@@ -52,7 +59,7 @@ type database = {
   db_password : string;
   allowed_users : string list option; (* If defined, then the list of allowed users *)
   create_table : create_table option; (* allow to CREATE tables matching this regular expression *)
-  time_column : string option;
+  time : time_method;
   tags_jsonb_column : string option;
   tag_columns : string list option;
   fields_jsonb_column : string option;
