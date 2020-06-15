@@ -64,14 +64,7 @@ module Internal: sig
   module FieldMap: Map.S with type key = string
   module TableMap: Map.S with type key = string
 
-  type field_type =
-    | FT_String
-    | FT_Int
-    | FT_Float
-    | FT_Boolean
-    | FT_Jsonb
-    | FT_Timestamptz
-    | FT_Unknown of string
+  type field_type = Db_quoted.Types.t
 
   type table_info = {
     fields: field_type FieldMap.t
@@ -82,8 +75,7 @@ module Internal: sig
   type database_info = (table_name, table_info) Hashtbl.t
 
   val new_pg_connection_exn : db_spec -> Pg.connection
-  val db_of_identifier_exn : string -> string
-  val db_of_field_type : field_type -> string
+  val db_of_identifier_exn : string -> Db_quoted.t
 
   (** [insert_of_measurement ?measurements t reference_measurement] generates the INSERT command for inserting the
       reference_measurement (or if measurements is provided, the measurements) as well as the required parameters for the
@@ -92,13 +84,13 @@ module Internal: sig
       If measurements is provided, it must be similar to reference_measurement in the sense that it they must have the
       same tags and the same fields and time field must exist or not exist for all of them, no mixing.
   *)
-  val insert_of_measurement_exn : ?measurements:Influxdb_lexer.measurement list -> t -> Influxdb_lexer.measurement -> string * string array
+  val insert_of_measurement_exn : ?measurements:Influxdb_lexer.measurement list -> t -> Influxdb_lexer.measurement -> Db_quoted.t * string array
   val query_database_info_exn : Pg.connection -> database_info
 
   type made_table = {
-    md_command : string;
+    md_command : Db_quoted.t;
     md_table_info : table_info;
-    md_update_pks : string list list TableMap.t -> string list list TableMap.t;
+    md_update_pks : Db_quoted.t list list TableMap.t -> Db_quoted.t list list TableMap.t;
   }
   val make_table_command_exn : t -> Influxdb_lexer.measurement -> made_table
 end

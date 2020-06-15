@@ -35,6 +35,10 @@ let _ = Printexc.register_printer (function
     | _ -> None
   )
 
+let db_quoted_of_value = function
+  | V_Integer x -> Db_quoted.(!(Int64.to_string x))
+  | V_String _x -> failwith "code to quote string values to SQL not implemented"
+
 let string_of_value = function
   | V_Integer x -> Int64.to_string x
   | V_String x -> x
@@ -42,16 +46,19 @@ let string_of_value = function
 type statement =
   | CreateIndex of create_index
 
-let rec string_of_expression ?(db_of_identifier_exn=Common.db_of_identifier_exn) = fun x ->
-  let (!) x = "(" ^ x ^ ")" in
+let rec db_quoted_of_expression ?(db_of_identifier_exn=Db_quoted.id_exn) = fun x ->
+  let open Db_quoted in
+  let (!!) x = !"(" ^ x ^ !")" in
   try
     match x with
-    | E_Literal value -> string_of_value value
+    | E_Literal value -> db_quoted_of_value value
     | E_Identifier string -> db_of_identifier_exn string
     | E_FunCall (func, expressions) ->
-      db_of_identifier_exn func ^ "(" ^ String.concat ", " (List.map string_of_expression expressions) ^ ")"
+      db_of_identifier_exn func ^ !"(" ^ concat !", " (List.map db_quoted_of_expression expressions) ^ !")"
     | E_RelOp (a, relop, b) ->
-      !(string_of_expression a) ^ " " ^ relop ^ " " ^ !(string_of_expression b)
+      !!(db_quoted_of_expression a) ^ !" " ^ !relop ^ !" " ^ !!(db_quoted_of_expression b)
     | E_Cast (a, b) ->
-      !(string_of_expression a) ^ "::" ^ db_of_identifier_exn b
-  with exn -> "***" ^ Printexc.to_string exn ^ "***"
+      !!(db_quoted_of_expression a) ^ !"::" ^ db_of_identifier_exn b
+  with exn ->
+    (* TODO: bit on the dangerous side? *)
+    !"--- " ^ !(CCString.replace ~which:`All ~sub:"\n" ~by:" " (Printexc.to_string exn)) ^ !"\n"

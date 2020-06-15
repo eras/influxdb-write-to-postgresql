@@ -2,15 +2,15 @@ module Log = (val Logs.src_log Logging.db_writer_src : Logs.LOG)
 
 module Pg = Postgresql
 
-let db_exec_exn (db: Pg.connection) ?params ?expect query =
+let db_exec_exn (db: Pg.connection) ?params ?expect (query : Db_quoted.t) =
   let (time_exn, res) =
     Common.time_exn
-      (Common.valuefy (fun () -> db#exec ?expect ?params query))
+      (Common.valuefy (fun () -> db#exec ?expect ?params (query :> string)))
       ()
   in
   Log.debug (fun m ->
       m "Exec %s with %s took %.1f ms"
-        ([%derive.show: string] query)
+        ([%derive.show: string] (query :> string))
         (match params with
          | None -> "no parameters"
          | Some params -> [%derive.show: string array] params)
@@ -45,29 +45,13 @@ struct
   module FieldMap = Map.Make(String)
   module TableMap = Map.Make(String)
 
-  type field_type =
-    | FT_String
-    | FT_Int
-    | FT_Float
-    | FT_Boolean
-    | FT_Jsonb
-    | FT_Timestamptz
-    | FT_Unknown of string
+  type field_type = Db_quoted.Types.t
 
-  let db_of_field_type = function
-    | FT_Int         -> "integer"
-    | FT_Float       -> "double precision"
-    | FT_String      -> "text"
-    | FT_Boolean     -> "boolean"
-    | FT_Jsonb       -> "jsonb"
-    | FT_Timestamptz -> "timestamptz"
-    | FT_Unknown str -> str
+  let db_concat = Db_quoted.(concat !", ")
 
-  let not_null x = x ^ " NOT NULL"
-  let default value x = x ^ " DEFAULT(" ^ value ^ ")"
-  let db_concat = String.concat ", "
-
-  let field_type_of_db = function
+  let field_type_of_db =
+    let open Db_quoted.Types in
+    function
     | "integer"           -> FT_Int
     | "double precision"  -> FT_Float
     | "numeric"           -> FT_Float
@@ -77,7 +61,9 @@ struct
     | "timestamptz"       -> FT_Timestamptz
     | name                -> FT_Unknown name
 
-  let field_type_of_value = function
+  let field_type_of_value =
+    let open Db_quoted.Types in
+    function
     | Influxdb_lexer.String _   -> FT_String
     | Influxdb_lexer.Int _      -> FT_Int
     | Influxdb_lexer.FloatNum _ -> FT_Float
@@ -128,7 +114,7 @@ type t = {
   time_precision: Precision.t;
   config: config;
   mutable database_info: database_info;
-  mutable indices: string list list TableMap.t;
+  mutable indices: Db_quoted.t list list TableMap.t;
 }
 
 type timestamp_method =
@@ -158,8 +144,8 @@ struct
   include Internal0
 
   let db_of_identifier_exn x =
-    try Common.db_of_identifier_exn x
-    with Common.Error Common.MalformedUTF8 ->
+    try Db_quoted.id_exn x
+    with Db_quoted.Error Db_quoted.MalformedUTF8 ->
       raise (Error MalformedUTF8)
 
   let db_tags_exn (meas : Influxdb_lexer.measurement) =
@@ -210,11 +196,10 @@ struct
         ) |> Yojson.to_string]
 
   let map_timestamp t els =
-    let map_timefield placeholder =
-      Printf.sprintf
-        (match timestamp_method with
-         | TS_StringTimestamp -> "%s"
-         | TS_CallTimestamp -> "to_timestamp(%s)") placeholder
+    let map_timefield (ph : Db_quoted.t) =
+      match timestamp_method with
+      | TS_StringTimestamp -> ph
+      | TS_CallTimestamp -> Db_quoted.(!"to_timestamp(" ^ ph ^ !")")
     in
     let aux els =
       match els, List.length t.time_fields with
@@ -225,9 +210,10 @@ struct
     aux els
 
   let make_timestamp t xs =
+    let open Db_quoted in
     (match t.time_fields with
-     | [_] -> ["CURRENT_TIMESTAMP"]
-     | [_; _] -> ["CURRENT_TIMESTAMP"; "0"]
+     | [_] -> [!"CURRENT_TIMESTAMP"]
+     | [_; _] -> [!"CURRENT_TIMESTAMP"; !"0"]
      | _ -> assert false) @ xs
 
   let db_names_of_tags_exn t meas=
@@ -254,7 +240,7 @@ struct
       let time =
         match meas.time with
         | None -> []
-        | Some _ -> t.time_fields
+        | Some _ -> List.map Db_quoted.id_exn t.time_fields
       in
       time @ db_names_of_tags_exn t meas
     in
@@ -263,7 +249,7 @@ struct
     |> with_enumerate next_placeholder
     |> fun (placeholder, next_placeholder) ->
     placeholder
-    |> Common.map_fst (Printf.sprintf "$%d")
+    |> Common.map_fst Db_quoted.placeholder
     |> List.map fst
     |> fun xs ->
     match meas.time with
@@ -288,11 +274,13 @@ struct
     | None ->
       db_concat (List.concat [db_fields_exn meas] |>
                  List.map @@ fun field ->
-                 field ^ "=" ^ "excluded." ^ field)
+                 Db_quoted.(field ^ !"=" ^ !"excluded." ^ field))
     | Some fields ->
-      db_of_identifier_exn fields ^ "=" ^
-      db_of_identifier_exn meas.measurement ^ "." ^ db_of_identifier_exn fields ^ "||" ^
-      "excluded." ^ db_of_identifier_exn fields
+      Db_quoted.(
+        db_of_identifier_exn fields ^ !"=" ^
+        db_of_identifier_exn meas.measurement ^ !"." ^ db_of_identifier_exn fields ^ !"||" ^
+        !"excluded." ^ db_of_identifier_exn fields
+      )
 
   let conflict_tags_exn t (meas : Influxdb_lexer.measurement) =
     match TableMap.find_opt meas.measurement t.indices with
@@ -302,7 +290,7 @@ struct
   let insert_of_measurement_exn ?(measurements:Influxdb_lexer.measurement list option) t (reference : Influxdb_lexer.measurement) =
     let db_values_placeholders ?next_placeholder meas =
       let (placeholders, next) = db_insert_value_placeholders_exn ?next_placeholder t meas in
-      ("(" ^ db_concat placeholders ^ ")", next)
+      Db_quoted.(!"(" ^ db_concat placeholders ^ !")", next)
     in
     let values =
       match measurements with
@@ -316,14 +304,15 @@ struct
            (next_placeholder, placeholders::fields)
         )
         (1, [])
-        values |> snd |> List.rev |> String.concat ", "
+        values |> snd |> List.rev |> db_concat
     in
     let query =
-      "INSERT INTO " ^ db_of_identifier_exn reference.measurement ^
-      "(" ^ db_concat (db_insert_fields_exn t reference) ^ ")" ^
-      "\nVALUES " ^ values_placeholders ^
-      "\nON CONFLICT(" ^ db_concat (conflict_tags_exn t reference) ^ ")" ^
-      "\nDO UPDATE SET " ^ db_update_set_exn t reference
+      let open Db_quoted in
+      !"INSERT INTO " ^ db_of_identifier_exn reference.measurement ^
+      !"(" ^ db_concat (db_insert_fields_exn t reference) ^ !")" ^
+      !"\nVALUES " ^ values_placeholders ^
+      !"\nON CONFLICT(" ^ db_concat (conflict_tags_exn t reference) ^ !")" ^
+      !"\nDO UPDATE SET " ^ db_update_set_exn t reference
     in
     let time (meas : Influxdb_lexer.measurement) =
       let fields base nanoseconds =
@@ -364,7 +353,7 @@ struct
     (query, params |> Array.of_list)
 
   let query_database_info_exn (db: Pg.connection) =
-    let result = db_exec_exn db ~expect:[Pg.Tuples_ok] "SELECT table_name, column_name, data_type FROM INFORMATION_SCHEMA.COLUMNS WHERE table_schema='public'" in
+    let result = db_exec_exn db ~expect:[Pg.Tuples_ok] Db_quoted.(!"SELECT table_name, column_name, data_type FROM INFORMATION_SCHEMA.COLUMNS WHERE table_schema='public'") in
     let database_info = create_database_info () in
     let () = result#get_all_lst |> List.iter @@ function
       | [table_name; column_name; data_type] ->
@@ -383,8 +372,8 @@ struct
         _;
       } ->
       Some (fields |> List.map (function
-          | `Column field -> field
-          | `Expression expression -> Sql.string_of_expression ~db_of_identifier_exn expression
+          | `Column field -> db_of_identifier_exn field
+          | `Expression expression -> Sql.db_quoted_of_expression ~db_of_identifier_exn expression
         ))
     | Sql.CreateIndex {
         unique = false;
@@ -425,39 +414,42 @@ struct
     List.map (fun (name, value) -> (name, field_type_of_value value)) measurement.fields
 
   let db_tags_and_types (measurement : Influxdb_lexer.measurement) =
-    List.map (fun (name, _) -> (name, FT_String)) measurement.tags
+    List.map (fun (name, _) -> (name, Db_quoted.Types.FT_String)) measurement.tags
+
+  let db_tags_and_types' (measurement : Influxdb_lexer.measurement) =
+    List.map (fun (name, _) -> (name, Db_quoted.Types.FT_String)) measurement.tags
 
   type made_table = {
-    md_command : string;
+    md_command : Db_quoted.t;
     md_table_info : table_info;
-    md_update_pks : string list list TableMap.t -> string list list TableMap.t;
+    md_update_pks : Db_quoted.t list list TableMap.t -> Db_quoted.t list list TableMap.t;
   }
 
   let make_table_command_exn (t : t) (measurement : Influxdb_lexer.measurement) : made_table =
     let table_name = measurement.measurement in
-    let dbify (name, type_) = (db_of_identifier_exn name, db_of_field_type type_) in
+    let dbify (name, type_) = (name, Db_quoted.id_type type_) in
     let field_columns =
       (match t.config.fields_column with
        | None -> db_fields_and_types measurement
-       | Some field -> [(field, FT_Jsonb)])
+       | Some field -> [(field, Db_quoted.Types.FT_Jsonb)])
     in
     let db_field_columns = field_columns |> List.map dbify in
     let pk_columns =
-      (match List.map db_of_identifier_exn t.time_fields with
-       | [timestamp] -> [(timestamp, FT_Timestamptz)]
-       | [timestamp; nanos] -> [(timestamp, FT_Timestamptz);
-                                (nanos, FT_Int)]
+      (match t.time_fields with
+       | [timestamp] -> [(timestamp, Db_quoted.Types.FT_Timestamptz)]
+       | [timestamp; nanos] -> [(timestamp, Db_quoted.Types.FT_Timestamptz);
+                                (nanos, Db_quoted.Types.FT_Int)]
        | _ -> assert false) @
       (match t.config.tags_column with
-       | None -> (db_tags_and_types measurement)
-       | Some tags -> [(tags, FT_Jsonb)])
+       | None -> (db_tags_and_types' measurement)
+       | Some tags -> [(tags, Db_quoted.Types.FT_Jsonb)])
     in
     let db_pk_columns =
       let identity x = x in
       let map2_zip f g x = (f x, g x) in
       let snd_lens f (a, b) = (a, f b) in
       pk_columns |> List.map (map2_zip identity dbify) |>
-      List.map (snd_lens (snd_lens not_null)) |>
+      List.map (snd_lens (snd_lens Db_quoted.not_null)) |>
       (* TODO: not very pretty. perhaps some more general concept about fields would help here. *)
       (match t.time_fields with
        | [_] -> Common.map_rest
@@ -469,24 +461,25 @@ struct
        | _ -> failwith "Expected exactly one or two time fields"
       )
         snd
-        (fun ((_name, field_type), (db_name, db_type)) ->
-           (db_name, default (
-               match field_type with
-               | FT_Jsonb -> "'{}'"
-               | FT_String -> "''"
-               | ft -> failwith ("Unexpected field type " ^ db_of_field_type ft)
-             ) db_type)
+        (fun ((_name, (field_type_ : Db_quoted.Types.t)), (db_name, db_type)) ->
+           (db_name, Db_quoted.(default (
+               match field_type_ with
+               | Db_quoted.Types.FT_Jsonb -> !"'{}'"
+               | Db_quoted.Types.FT_String -> !"''"
+               | ft -> failwith (Stdlib.("Unexpected field type " ^ (Db_quoted.id_type ft :> string)))
+             ) db_type))
         ) in
-    let join (a, b) = a ^ " " ^ b in
     let command =
-      "CREATE TABLE " ^ db_of_identifier_exn table_name ^
-      " (" ^ db_concat (((db_pk_columns @ db_field_columns) |> List.map join) @
-                        ["PRIMARY KEY(" ^ db_concat (List.map fst db_pk_columns) ^ ")"]) ^ ")"
+      let open Db_quoted in
+      let join (a, b) = a ^ !" " ^ b in
+      !"CREATE TABLE " ^ db_of_identifier_exn table_name ^
+      !" (" ^ db_concat (((db_pk_columns @ db_field_columns) |> Common.map_fst db_of_identifier_exn |> List.map join) @
+                        [!"PRIMARY KEY(" ^ db_concat (List.map (fun (id, _) -> db_of_identifier_exn id) db_pk_columns) ^ !")"]) ^ !")"
     in
     let table_info = { fields = (pk_columns @ field_columns) |> List.to_seq |> FieldMap.of_seq } in
     { md_command = command;
       md_table_info = table_info;
-      md_update_pks = TableMap.add table_name [pk_columns |> List.map fst] }
+      md_update_pks = TableMap.add table_name [pk_columns |> List.map fst |> List.map db_of_identifier_exn] }
 end
 
 open Internal
@@ -544,8 +537,8 @@ let string_of_error error =
   | PgError (error, None) -> Pg.string_of_error error
   | PgError (error, Some query) -> Pg.string_of_error error ^ " for " ^ query
   | MalformedUTF8 -> "Malformed UTF8"
-  | CannotAddTags tags -> "Cannot add tags " ^ db_concat (List.map (fun x -> try db_of_identifier_exn x with Error MalformedUTF8 -> "*malformed utf8*") tags)
-  | CannotCreateTable { reason; value } -> "Cannot create value " ^ (try db_of_identifier_exn value with Error MalformedUTF8 -> "*malformed utf8*") ^ " because " ^ reason
+  | CannotAddTags tags -> "Cannot add tags " ^ (db_concat (List.map (fun x -> try db_of_identifier_exn x with Error MalformedUTF8 -> Db_quoted.(!"--- *malformed utf8*\n")) tags) :> string)
+  | CannotCreateTable { reason; value } -> "Cannot create value " ^ ((try db_of_identifier_exn value with Error MalformedUTF8 -> Db_quoted.(!"*malformed utf8*")) :> string) ^ " because " ^ reason
   | NoPrimaryIndexFound table -> "No primary index found for table " ^ table
 
 let _ = Printexc.register_printer (function
@@ -583,10 +576,9 @@ let check_and_update_columns_exn ~kind t table_name values =
       );
     missing_columns |> List.iter @@ fun (field_name, field_type) ->
     ignore (db_exec_exn t.db ~expect:[Pg.Command_ok]
-              (Printf.sprintf "ALTER TABLE %s ADD COLUMN IF NOT EXISTS %s %s"
-                 (db_of_identifier_exn table_name)
-                 (db_of_identifier_exn field_name)
-                 (db_of_field_type field_type)
+              Db_quoted.(!"ALTER TABLE " ^ id_exn table_name
+                         ^ !" ADD COLUMN IF NOT EXISTS "
+                         ^ id_exn field_name ^ !" " ^ id_type field_type
               )
            )
   in
@@ -615,7 +607,7 @@ let check_and_update_tables_exn (t : t) (measurement : Influxdb_lexer.measuremen
       Hashtbl.replace t.database_info table_name made_table.md_table_info
     in
     let make_hypertable () =
-      let command = "SELECT create_hypertable($1, $2)" in
+      let command = Db_quoted.(!"SELECT create_hypertable($1, $2)") in
       let params = table_name::t.time_fields |> Array.of_list in
       ignore (db_exec_exn t.db ~expect:[Pg.Tuples_ok] ~params command)
     in
@@ -712,7 +704,7 @@ let group_measurements t measurements =
 
 let write_exn t (measurements: Influxdb_lexer.measurement list) =
   try
-    ignore (db_exec_exn t.db ~expect:[Pg.Command_ok] "BEGIN TRANSACTION");
+    ignore (db_exec_exn t.db ~expect:[Pg.Command_ok] Db_quoted.(!"BEGIN TRANSACTION"));
     let grouped = group_measurements t measurements in
     (* let grouped = [measurements] in *)
     List.iter (
@@ -731,12 +723,12 @@ let write_exn t (measurements: Influxdb_lexer.measurement list) =
         try
           ignore (db_exec_exn t.db ~params ~expect:[Pg.Command_ok] query);
         with Pg.Error error ->
-          (try ignore (db_exec_exn t.db ~expect:[Pg.Command_ok] "ROLLBACK");
+          (try ignore (db_exec_exn t.db ~expect:[Pg.Command_ok] Db_quoted.(!"ROLLBACK"));
            with Pg.Error _ -> (* ignore *) ());
-          raise (Error (PgError (error, Some query)))
+          raise (Error (PgError (error, Some (query :> string))))
     ) grouped;
-    ignore (db_exec_exn t.db ~expect:[Pg.Command_ok] "COMMIT");
+    ignore (db_exec_exn t.db ~expect:[Pg.Command_ok] Db_quoted.(!"COMMIT"));
   with Pg.Error error ->
-    (try ignore (db_exec_exn t.db ~expect:[Pg.Command_ok] "ROLLBACK");
+    (try ignore (db_exec_exn t.db ~expect:[Pg.Command_ok] Db_quoted.(!"ROLLBACK"));
      with Pg.Error _ -> (* ignore *) ());
     raise (Error (PgError (error, None)))

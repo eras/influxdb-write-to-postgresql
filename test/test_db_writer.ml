@@ -11,13 +11,17 @@ CREATE UNIQUE INDEX meas_time_idx ON meas(time);
 
 let identity x = x
 
+let cast_to_string x = (x :> string)
+
 let testDbOfIdentifier _ctx =
-  assert_equal ~printer:identity {|moi|} (Db_writer.Internal.db_of_identifier_exn "moi");
-  assert_equal ~printer:identity {|moi0|} (Db_writer.Internal.db_of_identifier_exn "moi0");
-  assert_equal ~printer:identity {|U&"0moi"|} (Db_writer.Internal.db_of_identifier_exn "0moi");
-  assert_equal ~printer:identity {|U&"Moi"|} (Db_writer.Internal.db_of_identifier_exn "Moi");
-  assert_equal ~printer:identity {|U&"moi\0020"|} (Db_writer.Internal.db_of_identifier_exn "moi ");
-  assert_equal ~printer:identity {|U&"tidii\2603"|} (Db_writer.Internal.db_of_identifier_exn "tidii☃")
+  let open Db_quoted in
+  let printer = to_string in
+  assert_equal ~printer !{|moi|} (Db_writer.Internal.db_of_identifier_exn "moi");
+  assert_equal ~printer !{|moi0|} (Db_writer.Internal.db_of_identifier_exn "moi0");
+  assert_equal ~printer !{|U&"0moi"|} (Db_writer.Internal.db_of_identifier_exn "0moi");
+  assert_equal ~printer !{|U&"Moi"|} (Db_writer.Internal.db_of_identifier_exn "Moi");
+  assert_equal ~printer !{|U&"moi\0020"|} (Db_writer.Internal.db_of_identifier_exn "moi ");
+  assert_equal ~printer !{|U&"tidii\2603"|} (Db_writer.Internal.db_of_identifier_exn "tidii☃")
 
 let testInsert ctx =
   let schema = {|
@@ -39,7 +43,7 @@ CREATE UNIQUE INDEX meas_time_idx ON meas(time, moi1, moi2);
   assert_equal ~printer:identity {|INSERT INTO meas(time, moi1, moi2, value)
 VALUES (to_timestamp($1), $2, $3, $4)
 ON CONFLICT(time, moi1, moi2)
-DO UPDATE SET value=excluded.value|} (fst query);
+DO UPDATE SET value=excluded.value|} (fst query :> string);
   assert_equal ~printer:(fun x -> Array.to_list x |> String.concat ",") (snd query) [|"1590329952.000000000"; "1"; "2"; "42"|]
 
 let testInsertTimestampTZ6 ctx =
@@ -70,7 +74,7 @@ CREATE UNIQUE INDEX meas_time_idx ON meas(time, moi1, moi2);
   assert_equal ~printer:identity {|INSERT INTO meas(time, moi1, moi2, value)
 VALUES (to_timestamp($1), $2, $3, $4)
 ON CONFLICT(time, moi1, moi2)
-DO UPDATE SET value=excluded.value|} (fst query);
+DO UPDATE SET value=excluded.value|} (fst query :> string);
   assert_equal ~printer:(fun x -> Array.to_list x |> String.concat ",") (snd query) [|"1590329952.123456000"; "1"; "2"; "42"|]
 
 let testInsertTimestampTZNanos ctx =
@@ -103,11 +107,11 @@ CREATE UNIQUE INDEX meas_time_idx ON meas(time, nanoseconds, moi1, moi2);
   assert_equal ~printer:identity {|INSERT INTO meas(time, nanoseconds, moi1, moi2, value)
 VALUES (to_timestamp($1), $2, $3, $4, $5)
 ON CONFLICT(time, nanoseconds, moi1, moi2)
-DO UPDATE SET value=excluded.value|} (fst query);
+DO UPDATE SET value=excluded.value|} (fst query :> string);
   assert_equal ~printer:[%derive.show: string array] [|"1590329952"; "123456789"; "1"; "2"; "42"|] (snd query)
 
 let string_of_key_field_type (str, field_type) =
-  str ^ " " ^ Db_writer.Internal.db_of_field_type field_type
+  str ^ " " ^ (Db_quoted.id_type field_type :> string)
 
 let string_of_list f xs =
   String.concat ", " (List.map f xs)
@@ -135,11 +139,10 @@ CREATE UNIQUE INDEX meas_time_idx ON meas(time, moi1, moi2);
     Db_writer.Internal.make_table_command_exn db meas in
   assert_equal ~printer:identity
     {|CREATE TABLE meas (time timestamptz NOT NULL, moi1 text NOT NULL DEFAULT(''), moi2 text NOT NULL DEFAULT(''), k_int integer, k_float double precision, k_string text, k_bool boolean, PRIMARY KEY(time, moi1, moi2))|}
-    query;
+    (query :> string);
   assert_equal
     ~printer:(string_of_list string_of_key_field_type)
-    (let open Db_writer.Internal in
-     [("k_bool", FT_Boolean);
+    ([("k_bool", FT_Boolean);
       ("k_float", FT_Float);
       ("k_int", FT_Int);
       ("k_string", FT_String);
@@ -180,11 +183,10 @@ CREATE UNIQUE INDEX meas_time_idx ON meas(time, moi1, moi2);
     Db_writer.Internal.make_table_command_exn db meas in
   assert_equal ~printer:identity
     {|CREATE TABLE meas (time timestamptz NOT NULL, tags jsonb NOT NULL DEFAULT('{}'), fields jsonb, PRIMARY KEY(time, tags))|}
-    query;
+    (query :> string);
   assert_equal
     ~printer:(string_of_list string_of_key_field_type)
-    (let open Db_writer.Internal in
-     [("fields", FT_Jsonb);
+    ([("fields", FT_Jsonb);
       ("tags", FT_Jsonb);
       ("time", FT_Timestamptz);
      ])
@@ -222,11 +224,10 @@ CREATE UNIQUE INDEX meas_time_idx ON meas(time, moi1, moi2);
     Db_writer.Internal.make_table_command_exn db meas in
   assert_equal ~printer:identity
     {|CREATE TABLE meas (time timestamptz NOT NULL, nanoseconds integer NOT NULL, moi1 text NOT NULL DEFAULT(''), moi2 text NOT NULL DEFAULT(''), k_int integer, k_float double precision, k_string text, k_bool boolean, PRIMARY KEY(time, nanoseconds, moi1, moi2))|}
-    query;
+    (query :> string);
   assert_equal
     ~printer:(string_of_list string_of_key_field_type)
-    (let open Db_writer.Internal in
-     [("k_bool", FT_Boolean);
+    ([("k_bool", FT_Boolean);
       ("k_float", FT_Float);
       ("k_int", FT_Int);
       ("k_string", FT_String);
@@ -255,7 +256,7 @@ CREATE UNIQUE INDEX meas_time_idx ON meas(time, moi1, moi2);
   assert_equal ~printer:identity {|INSERT INTO meas(time, moi1, moi2, value)
 VALUES (CURRENT_TIMESTAMP, $1, $2, $3)
 ON CONFLICT(time, moi1, moi2)
-DO UPDATE SET value=excluded.value|} (fst query);
+DO UPDATE SET value=excluded.value|} (fst query :> string);
   assert_equal ~printer:(fun x -> Array.to_list x |> String.concat ",")
     [|"1"; "2"; "42"|]
     (snd query)
@@ -286,7 +287,7 @@ CREATE UNIQUE INDEX meas_time_idx ON meas(time, tags);
   assert_equal ~printer:identity {|INSERT INTO meas(time, tags, value)
 VALUES (to_timestamp($1), $2, $3)
 ON CONFLICT(time, tags)
-DO UPDATE SET value=excluded.value|} (fst query);
+DO UPDATE SET value=excluded.value|} (fst query :> string);
   assert_equal ~printer:(fun x -> Array.to_list x |> String.concat ",")
     [|"1590329952.000000000"; {|{"moi1":"1","moi2":"2"}|}; "42"|] (snd query)
 
@@ -316,7 +317,7 @@ CREATE UNIQUE INDEX meas_time_idx ON meas(time, moi1, moi2);
   assert_equal ~printer:identity {|INSERT INTO meas(time, moi1, moi2, fields)
 VALUES (to_timestamp($1), $2, $3, $4)
 ON CONFLICT(time, moi1, moi2)
-DO UPDATE SET fields=meas.fields||excluded.fields|} (fst query);
+DO UPDATE SET fields=meas.fields||excluded.fields|} (fst query :> string);
   assert_equal ~printer:(fun x -> Array.to_list x |> String.concat ",") [|"1590329952.000000000"; "1"; "2"; {|{"value":42}|}|]
     (snd query)
 

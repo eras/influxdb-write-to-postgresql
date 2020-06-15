@@ -138,7 +138,7 @@ let create_new_database_exn =
     in
     ignore (pg#exec ~expect:[Postgresql.Command_ok] (Printf.sprintf {|
 CREATE DATABASE %s
-|} (Db_writer.Internal.db_of_identifier_exn name)));
+|} (Db_writer.Internal.db_of_identifier_exn name :> string)));
     pg#finish;
     let conninfo_with_dbname =
       match db_spec with
