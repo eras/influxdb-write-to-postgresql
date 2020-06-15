@@ -85,3 +85,4 @@ type t = {
 
 val dump_exn : t -> unit
 val load_exn : string -> t
+val to_yojson : t -> Yojson.Safe.t

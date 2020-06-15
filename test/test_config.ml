@@ -1,7 +1,7 @@
 open OUnit2
 open Influxdb_write_to_postgresql
 
-let _testDump _ctx =
+let testDump _ctx =
   let config = Config.({
       users = ["test", {
           group = None;
@@ -36,13 +36,16 @@ let _testDump _ctx =
       regexp_databases = [];
       realm = "lala";
     }) in
-  Config.dump_exn config
+  assert_equal ~msg:"Comparing configurations"
+    ~printer:[%derive.show: string]
+    {|{"databases":[["tidii",{"create_table":{"method":"create_table","regexp":".*"},"db_host":"local","db_name":"tadataa","db_password":"plop","db_port":4242,"db_user":"asdf","fields_jsonb_column":null,"tags_jsonb_column":null,"time":{"tz+nanoseconds":{"nano_field":"nanos","time_field":"time"}}}]],"realm":"lala","regexp_users":[[".*",{"password":{"password":"","type":"plain"}}]],"users":[["test",{"password":{"password":"","type":"plain"}}]]}|}
+    (Config.to_yojson config |> Yojson.Safe.sort |> Yojson.Safe.to_string)
 
 let testLoad _ctx =
   let _config = Config.load_exn "doc/config.example.yaml" in
   ()
 
 let suite = "Db_config" >::: [
-    (* "_testDump" >:: _testDump; *)
+    "testDump" >:: testDump;
     "testLoad" >:: testLoad;
   ]
